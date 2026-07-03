@@ -58,13 +58,13 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .name("destatis")
     .description(
       "CLI for the DESTATIS GENESIS-Online REST API " +
-        "(https://www-genesis.destatis.de) — Germany's official-statistics database. " +
+        "(https://genesis.destatis.de) — Germany's official-statistics database. " +
         "Needs a free account: pass --token (env DESTATIS_API_TOKEN) or " +
         "--username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
         "Register at https://www-genesis.destatis.de; `destatis hello` needs no credentials.",
     )
     .version(VERSION)
-    .option("--base-url <url>", "API base URL", "https://www-genesis.destatis.de")
+    .option("--base-url <url>", "API base URL", "https://genesis.destatis.de")
     .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)")
     .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)")
     .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)")

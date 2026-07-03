@@ -56,3 +56,9 @@ export function makeMockTransport(
 export function queryOf(req: HttpRequest): URLSearchParams {
   return new URL(req.url).searchParams;
 }
+
+/** Parse the form-urlencoded body of a recorded POST request. */
+export function bodyOf(req: HttpRequest): URLSearchParams {
+  const raw = req.body === undefined ? "" : req.body.toString();
+  return new URLSearchParams(raw);
+}

@@ -45,25 +45,39 @@ npm start -- --help # run the built CLI
 The GENESIS API differs from most sibling repos in four ways an editor must
 preserve:
 
-### 1. Auth is credentials-in-the-URL, not a header
+### 1. Auth is POST with credentials in HTTP header fields
 
-There is **no** `Authorization`/`X-API-Key` header. GENESIS accepts either a
-32-char **API token placed in the `username` field** (password omitted) or a
-**username + password** pair, sent as **query parameters**. The client
-(`client.ts`) merges the credential query params into every request except
-`helloworld/whoami`; the CLI resolves them with precedence **flag > env > unset**
-(`--token` seeded from `DESTATIS_API_TOKEN`, etc., in `program.ts`; validated in
-`shared.ts:resolveCredentials`). A token wins over username/password. Supplying
+**Verified against the live 2020 endpoint** (the legacy GET-with-query-param
+style is dead — the server 302-redirects it to an announcement page). Every
+authenticated call is a **`POST`** with:
+
+- an `application/x-www-form-urlencoded` **body** carrying the parameters
+  (`buildQueryString` doubles as the form encoder), and
+- the credentials in **header fields**: `username` (the 32-char API token *or* the
+  account username) and, only in username/password mode, `password`. There is
+  **no** `Authorization`/`X-API-Key` header.
+
+Only `helloworld/whoami` is an unauthenticated **`GET`**. The client
+(`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
+resolves credentials with precedence **flag > env > unset** (`--token` seeded from
+`DESTATIS_API_TOKEN`, etc., in `program.ts`; validated in
+`shared.ts:resolveCredentials`). A token wins over username/password; supplying
 only one of username/password is a `DestatisUsageError` (exit 2).
 
-Because credentials ride in the URL:
+Two things the transport MUST get right (both found by live testing):
 
-- **Error messages are redacted.** `engine.ts:redactUrl` masks `username`/
-  `password` before any URL reaches an error or stderr. Keep this on every path
-  that surfaces a URL.
-- **Redirects are NOT followed.** A 3xx would risk sending the credential query
-  string to another host, so the engine treats any 3xx as an error rather than
-  following it. (This is the documented per-repo redirect policy for this API.)
+- **`Content-Type` needs `; charset=UTF-8`.** Without it GENESIS decodes the body
+  as Latin-1, so a UTF-8 umlaut (`Bevölkerung`) arrives mojibaked and matches
+  nothing. `engine.ts:FORM_CONTENT_TYPE` sets it.
+- **Always send `Content-Length`** (even `0`) — GENESIS answers `411` to a POST
+  without one.
+
+**Redirects are NOT followed.** The canonical host `genesis.destatis.de` answers
+directly; the legacy `www-genesis.destatis.de` host cross-origin-redirects (`307`)
+to it, and following that would forward the credential headers to another origin.
+A 3xx therefore surfaces as an error hinting at the canonical host.
+`engine.ts:redactUrl` additionally scrubs any `username`/`password` that a caller
+managed to put in a URL (defensive — this client keeps them in headers).
 
 ### 2. HTTP 200 does not mean success
 
@@ -122,12 +136,33 @@ GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
 credential injection + token precedence (`client.test.ts`), the credential guard
 / exit codes / env seeding (`cli.test.ts`).
 
-## Open questions (verify against a live account)
+## Verified against a live account (2026-07-03)
 
-- Whether GET-with-query-param credentials keeps working for **all** methods
-  (the v5.1 guide's stated direction is POST with header fields; every wrapper
-  uses GET and the live server honours it). The transport already accepts a
-  `body`, so a POST switch is contained.
-- Exact `area` literal for public reads (`all` is the default here).
-- The `find` `category` literal for time series (`time-series` vs `timeseries`).
-- Full `Status.Code` catalogue for finer exit-code mapping.
+Confirmed with a real API token — `hello`, `logincheck`, `find`, `catalogue`,
+`metadata`, `data table` (real figures), and `data tablefile` (a valid ZIP) all
+work end to end:
+
+- **Transport:** POST + credential headers + `charset=UTF-8` form body (§1). The
+  legacy GET+query style is gone.
+- **Host:** `genesis.destatis.de` (the default). `www-genesis.destatis.de`
+  `307`-redirects to it (cross-origin).
+- **`area`:** not sent by default; the server applies `Öffentlich`.
+- **`find` categories:** `all` / `tables` / `statistics` / `cubes` / `variables` /
+  `time-series` are all valid (the API maps them to German internally, e.g.
+  `tables` → `Tabellen`).
+- **Not found:** a missing object code (`metadata`/`data`) returns
+  `Status.Code 104` ("keine Objekte zum Selektionskriterium") — a valid **empty**
+  result (exit 0), the same code an empty catalogue/find search returns. The
+  `90 → exit 4` mapping remains as a defensive path per the API docs.
+- **Flakiness:** `find/find` intermittently returns **HTTP 500** under load —
+  GENESIS throttles on *concurrency* (~3 parallel; `logincheck` reports killing
+  long-running parallel requests) and surfaces it as a 500 rather than 429/503, so
+  the built-in retry does not catch it. Keep requests serial; retry a 500 manually.
+
+## Still open
+
+- Full `Status.Code` catalogue for finer exit-code mapping (only 0/22/50/90/98/104
+  observed).
+- Whether to add HTTP 500 to the retry set (currently no — a 500 may be a real
+  error, not only throttling).
+- The async batch-job flow (below) — never exercised.

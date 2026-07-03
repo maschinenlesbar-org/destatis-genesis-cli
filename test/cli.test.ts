@@ -4,7 +4,7 @@ import { run } from "../src/cli/run.js";
 import { DestatisClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, jsonResponse } from "./helpers.js";
+import { makeMockTransport, jsonResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 function makeCli(
@@ -55,14 +55,14 @@ test("only one of --username/--password exits 2 before any request", async () =>
   assert.match(cli.err.join("\n"), /BOTH --username and --password/);
 });
 
-test("--token sends the token in the username query field", async () => {
+test("--token sends the token in the username header", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   const code = await run([...TOKEN, "catalogue", "tables", "124*"], cli.deps);
   assert.equal(code, 0);
-  const q = new URL(cli.mt.last().url).searchParams;
-  assert.equal(q.get("username"), "0123456789abcdef0123456789abcdef");
-  assert.equal(q.get("password"), null);
-  assert.equal(q.get("selection"), "124*");
+  const req = cli.mt.last();
+  assert.equal(req.headers?.["username"], "0123456789abcdef0123456789abcdef");
+  assert.equal(req.headers?.["password"], undefined);
+  assert.equal(bodyOf(req).get("selection"), "124*");
 });
 
 test("DESTATIS_API_TOKEN from the environment seeds the credential", async () => {
@@ -71,19 +71,16 @@ test("DESTATIS_API_TOKEN from the environment seeds the credential", async () =>
   });
   const code = await run(["find", "Bevölkerung"], cli.deps);
   assert.equal(code, 0);
-  const q = new URL(cli.mt.last().url).searchParams;
-  assert.equal(q.get("username"), "envtoken0000000000000000000000ab");
-  assert.equal(q.get("term"), "Bevölkerung");
-  assert.equal(new URL(cli.mt.last().url).pathname, "/genesisWS/rest/2020/find/find");
+  const req = cli.mt.last();
+  assert.equal(req.headers?.["username"], "envtoken0000000000000000000000ab");
+  assert.equal(bodyOf(req).get("term"), "Bevölkerung");
+  assert.equal(new URL(req.url).pathname, "/genesisWS/rest/2020/find/find");
 });
 
 test("an explicit --token overrides DESTATIS_API_TOKEN from the environment", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult), { DESTATIS_API_TOKEN: "envtoken" });
   await run([...TOKEN, "find", "x"], cli.deps);
-  assert.equal(
-    new URL(cli.mt.last().url).searchParams.get("username"),
-    "0123456789abcdef0123456789abcdef",
-  );
+  assert.equal(cli.mt.last().headers?.["username"], "0123456789abcdef0123456789abcdef");
 });
 
 test("a blank <term> on find is rejected before any request", async () => {
@@ -104,10 +101,10 @@ test("data table sends the object name to data/table", async () => {
   const cli = makeCli(() => jsonResponse(fx.dataTable));
   const code = await run([...TOKEN, "data", "table", "12411-0001", "--start-year", "2020"], cli.deps);
   assert.equal(code, 0);
-  const url = new URL(cli.mt.last().url);
-  assert.equal(url.pathname, "/genesisWS/rest/2020/data/table");
-  assert.equal(url.searchParams.get("name"), "12411-0001");
-  assert.equal(url.searchParams.get("startyear"), "2020");
+  assert.equal(new URL(cli.mt.last().url).pathname, "/genesisWS/rest/2020/data/table");
+  const body = bodyOf(cli.mt.last());
+  assert.equal(body.get("name"), "12411-0001");
+  assert.equal(body.get("startyear"), "2020");
 });
 
 test("a GENESIS logical error (HTTP 200 + Status Fehler) exits 1", async () => {

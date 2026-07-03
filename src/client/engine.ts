@@ -16,7 +16,9 @@ import { DestatisApiError, DestatisParseError } from "./errors.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
-const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
+// The charset is REQUIRED: without it GENESIS decodes the body as Latin-1, so a
+// UTF-8 umlaut (e.g. "Bevölkerung") arrives mojibaked and matches nothing.
+const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=UTF-8";
 
 // GENESIS logical `Status.Code` values this engine acts on. All others (0 ok,
 // 22 ok-with-auto-correction, 50 no-newer-data, ...) are returned as-is so the

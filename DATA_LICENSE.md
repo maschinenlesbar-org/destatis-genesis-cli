@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | **Data provider** | Statistisches Bundesamt (Destatis) |
-| **API / source** | `https://www-genesis.destatis.de/genesisWS/rest/2020` · portal: https://www-genesis.destatis.de |
+| **API / source** | `https://genesis.destatis.de/genesisWS/rest/2020` · portal: https://www-genesis.destatis.de |
 | **Data license** | **Datenlizenz Deutschland – Namensnennung – Version 2.0** (`DL-DE-BY-2.0`) |
 | **License text** | https://www.govdata.de/dl-de/by-2-0 |
 | **Attribution** | **Required** (provider name + `dl-de/by-2-0` reference). |
