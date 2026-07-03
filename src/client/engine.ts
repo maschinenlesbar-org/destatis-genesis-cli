@@ -1,0 +1,290 @@
+// The request engine: turns logical (path, params) calls into HTTP requests via a
+// Transport, applies retry/backoff for transient statuses (429, 503), decodes
+// responses, and — crucially for GENESIS — inspects the `Status` object in a
+// *successful* (HTTP 200) body to surface logical errors.
+//
+// Transport shape (verified against the live 2020 endpoint): authenticated calls
+// are **POST** with an `application/x-www-form-urlencoded` body carrying the
+// parameters, and credentials in HTTP **header** fields (`username`, and
+// `password` when not using a token). The legacy GET-with-query-param-credentials
+// style is no longer honoured by the server (it 302-redirects to an announcement
+// page). Only `helloworld/whoami` is an unauthenticated GET.
+
+import { nodeHttpTransport, type Transport } from "./http.js";
+import { buildQueryString, type QueryParams } from "./query.js";
+import { DestatisApiError, DestatisParseError } from "./errors.js";
+
+export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
+const DEFAULT_USER_AGENT = "destatis-genesis-cli";
+const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
+
+// GENESIS logical `Status.Code` values this engine acts on. All others (0 ok,
+// 22 ok-with-auto-correction, 50 no-newer-data, ...) are returned as-is so the
+// caller sees the full envelope (Status.Content carries any warning text).
+const CODE_NOT_FOUND = 90; // requested object does not exist
+const CODE_TOO_LARGE = 98; // result too large for a synchronous fetch (needs the async job flow)
+const CODE_EMPTY = 104; // no object matched the selection/search — a valid *empty* result
+
+export interface RawResponse {
+  data: Buffer;
+  contentType: string;
+  status: number;
+}
+
+export interface EngineOptions {
+  /** Base URL of the API. Defaults to https://genesis.destatis.de */
+  baseUrl?: string;
+  /** Swappable transport. Defaults to the built-in node http/https transport. */
+  transport?: Transport;
+  /** Value of the User-Agent header. */
+  userAgent?: string;
+  /** Extra headers sent on every request. */
+  defaultHeaders?: Record<string, string>;
+  /** Per-request timeout in milliseconds (0 disables). */
+  timeoutMs?: number;
+  /** Number of automatic retries for transient (429/503) responses. */
+  maxRetries?: number;
+  /** Base backoff between retries in milliseconds (grows linearly). */
+  retryDelayMs?: number;
+  /**
+   * Hard cap on response body size in bytes (defends against memory exhaustion
+   * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit.
+   */
+  maxResponseBytes?: number;
+  /** Injectable sleep, primarily for deterministic tests. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
+
+const realSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Mask credential query parameters in a URL before it appears in an error
+ * message. Defensive: this client sends credentials in headers (not the query
+ * string), but a caller who overrides the transport or base URL could still put
+ * them in the URL, so any URL surfaced in an error is scrubbed.
+ */
+export function redactUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    for (const key of ["username", "password"]) {
+      if (u.searchParams.has(key)) u.searchParams.set(key, "***");
+    }
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+export class RequestEngine {
+  private readonly baseUrl: string;
+  private readonly transport: Transport;
+  private readonly userAgent: string;
+  private readonly defaultHeaders: Record<string, string>;
+  private readonly timeoutMs: number;
+  private readonly maxRetries: number;
+  private readonly retryDelayMs: number;
+  private readonly maxResponseBytes: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+
+  constructor(options: EngineOptions = {}) {
+    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.transport = options.transport ?? nodeHttpTransport;
+    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
+    this.defaultHeaders = options.defaultHeaders ?? {};
+    this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.maxRetries = options.maxRetries ?? 2;
+    this.retryDelayMs = options.retryDelayMs ?? 200;
+    this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
+    this.sleep = options.sleep ?? realSleep;
+  }
+
+  /** Build a fully-qualified URL from a path (parameters travel in the body). */
+  buildUrl(path: string): string {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${this.baseUrl}${normalizedPath}`;
+  }
+
+  /**
+   * Perform a request with Accept negotiation and transient-error retries. POST
+   * requests carry `params` as a form-urlencoded body; GET requests take none.
+   *
+   * Redirects are deliberately NOT followed: the canonical host
+   * (genesis.destatis.de) answers directly, and the legacy `www-genesis` host
+   * cross-origin-redirects (307) — following that would forward credential
+   * headers to another origin. A 3xx therefore surfaces as an error, with a hint
+   * to use the canonical host.
+   */
+  private async request(
+    method: "GET" | "POST",
+    path: string,
+    options: { params?: QueryParams; accept: string; authHeaders?: Record<string, string> },
+  ): Promise<RawResponse> {
+    const url = this.buildUrl(path);
+    const headers: Record<string, string> = {
+      Accept: options.accept,
+      "User-Agent": this.userAgent,
+      ...this.defaultHeaders,
+      ...(options.authHeaders ?? {}),
+    };
+
+    let body: Buffer | undefined;
+    if (method === "POST") {
+      body = Buffer.from(buildQueryString(options.params ?? {}), "utf8");
+      headers["Content-Type"] = FORM_CONTENT_TYPE;
+      // Always set Content-Length (even 0) — GENESIS answers 411 to a POST
+      // without one.
+      headers["Content-Length"] = String(body.length);
+    }
+
+    let attempt = 0;
+    for (;;) {
+      const response = await this.transport({
+        method,
+        url,
+        headers,
+        ...(body !== undefined ? { body } : {}),
+        timeoutMs: this.timeoutMs,
+        ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
+      });
+
+      const status = response.status;
+      const retryable = status === 429 || status === 503;
+      if (retryable && attempt < this.maxRetries) {
+        attempt += 1;
+        await this.sleep(this.retryDelayMs * attempt);
+        continue;
+      }
+
+      const contentType = String(response.headers["content-type"] ?? "");
+      if (status < 200 || status >= 300) {
+        throw this.toApiError(method, url, status, response.body);
+      }
+
+      return { data: response.body, contentType, status };
+    }
+  }
+
+  /** GET a JSON body without credentials (helloworld/whoami). */
+  async getJson<T>(path: string): Promise<T> {
+    const res = await this.request("GET", path, { accept: "application/json" });
+    return this.decodeJson<T>("GET", path, res);
+  }
+
+  /** POST form-encoded params (with credential headers) and parse the JSON reply. */
+  async postJson<T>(
+    path: string,
+    params: QueryParams,
+    authHeaders: Record<string, string>,
+  ): Promise<T> {
+    const res = await this.request("POST", path, { params, accept: "application/json", authHeaders });
+    return this.decodeJson<T>("POST", path, res);
+  }
+
+  /**
+   * POST form-encoded params and return the raw bytes (file / binary downloads).
+   * If the server answered with JSON instead of the expected binary (e.g. a
+   * credential or "too large" error on a `data/*file` endpoint), the logical
+   * `Status` is checked so the failure surfaces cleanly.
+   */
+  async postRaw(
+    path: string,
+    accept: string,
+    params: QueryParams,
+    authHeaders: Record<string, string>,
+  ): Promise<RawResponse> {
+    const res = await this.request("POST", path, { params, accept, authHeaders });
+    if (/json/i.test(res.contentType)) {
+      const text = res.data.toString("utf8");
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        this.checkLogicalStatus("POST", this.buildUrl(path), text, parsed);
+      } catch (err) {
+        if (err instanceof DestatisApiError) throw err;
+        // Not parseable / not an envelope — fall through and return the bytes.
+      }
+    }
+    return res;
+  }
+
+  private decodeJson<T>(method: "GET" | "POST", path: string, res: RawResponse): T {
+    const text = res.data.toString("utf8");
+    if (res.status === 204 || text.trim().length === 0) {
+      return null as T;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch (cause) {
+      throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause });
+    }
+    this.checkLogicalStatus(method, this.buildUrl(path), text, parsed);
+    return parsed as T;
+  }
+
+  /**
+   * Inspect a parsed GENESIS envelope for a logical error. GENESIS answers HTTP
+   * 200 even when a request logically failed, carrying the outcome in `Status`.
+   * Throws for "object not found" (90), "too large" (98), and any error `Type`;
+   * returns quietly for success/warning codes and for the "empty result" code
+   * (104), which is a valid outcome the caller renders as an empty list.
+   */
+  private checkLogicalStatus(
+    method: "GET" | "POST",
+    url: string,
+    body: string,
+    parsed: unknown,
+  ): void {
+    if (!parsed || typeof parsed !== "object") return;
+    const status = (parsed as { Status?: unknown }).Status;
+    // helloworld/logincheck put a plain string in `Status`; only the object form
+    // carries a logical `Code` worth inspecting.
+    if (!status || typeof status !== "object") return;
+    const s = status as { Code?: unknown; Content?: unknown; Type?: unknown };
+    const code = typeof s.Code === "number" ? s.Code : undefined;
+    if (code === undefined || code === CODE_EMPTY) return;
+
+    const type = typeof s.Type === "string" ? s.Type : undefined;
+    const content = typeof s.Content === "string" ? s.Content : undefined;
+    const isErrorType = type !== undefined && /error|fehler/i.test(type);
+
+    if (code === CODE_NOT_FOUND || code === CODE_TOO_LARGE || isErrorType) {
+      const detail =
+        code === CODE_TOO_LARGE
+          ? `${content ?? "result too large"} — this read-only CLI does not run the async batch-job flow; narrow the selection (--start-year/--end-year/--timeslices/--class-key) or download a smaller subset`
+          : content;
+      throw new DestatisApiError({
+        method,
+        url: redactUrl(url),
+        body,
+        code,
+        statusType: type,
+        detail,
+      });
+    }
+  }
+
+  private toApiError(
+    method: "GET" | "POST",
+    url: string,
+    status: number,
+    body: Buffer,
+  ): DestatisApiError {
+    const text = body.toString("utf8");
+    let detail: string | undefined;
+    if (status >= 300 && status < 400) {
+      detail = "unexpected redirect — use the canonical host (default https://genesis.destatis.de)";
+    } else {
+      try {
+        const parsed = JSON.parse(text) as { Status?: { Content?: unknown }; detail?: unknown };
+        if (parsed?.Status && typeof parsed.Status.Content === "string") detail = parsed.Status.Content;
+        else if (typeof parsed?.detail === "string") detail = parsed.detail;
+      } catch {
+        // Non-JSON error body (e.g. an HTML error page); leave detail undefined.
+      }
+    }
+    return new DestatisApiError({ httpStatus: status, url: redactUrl(url), method, body: text, detail });
+  }
+}

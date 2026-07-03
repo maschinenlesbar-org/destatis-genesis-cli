@@ -1,0 +1,22 @@
+{
+  "name": "destatis-genesis",
+  "version": "0.1.0",
+  "description": "German official-statistics skills powered by the destatis-genesis-cli (DESTATIS GENESIS-Online API).",
+  "author": {
+    "name": "Sebastian Schürmann",
+    "email": "sebs@2xs.org"
+  },
+  "license": "AGPL-3.0-or-later",
+  "repository": "https://github.com/maschinenlesbar-org/destatis-genesis-cli",
+  "homepage": "https://github.com/maschinenlesbar-org/destatis-genesis-cli#readme",
+  "keywords": [
+    "destatis",
+    "genesis",
+    "genesis-online",
+    "statistik",
+    "official-statistics",
+    "germany",
+    "opendata",
+    "bund.dev"
+  ]
+}
