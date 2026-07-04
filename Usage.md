@@ -142,6 +142,13 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
   or download a subset via `data tablefile`.
 - **Pagination.** GENESIS paginates by `--pagelength` only (no offset/cursor);
   narrow with `selection`/`term` rather than paging.
+- **Transient upstream errors.** The GENESIS server is occasionally flaky: an
+  individual `find` term or request can return a transient `HTTP 500` or time out,
+  and the very same call usually succeeds moments later (the failure moves between
+  terms over time — it is not tied to a specific word or to umlauts). Just retry,
+  or raise `--timeout`. Note that only `429`/`503` are auto-retried (`--max-retries`),
+  **not** `500` or timeouts. Where the server includes a message, the CLI now
+  surfaces it in the error text.
 - **`"boolean"`/count fields are strings.** List items encode e.g. `Values` /
   `Cubes` counts and flags as JSON strings (`"9"`, `"true"`).
 - **Attribution.** Cite the `Copyright` field from each response — see
