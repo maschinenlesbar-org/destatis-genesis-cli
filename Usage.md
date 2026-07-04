@@ -122,10 +122,17 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 
 | Code | Meaning |
 |---|---|
-| `0` | success (help/version included) |
+| `0` | success (help/version included); also an **empty result** — see note |
 | `1` | API/logical error, network or parse error |
-| `2` | usage error (missing/partial credentials, bad arguments) |
-| `4` | object not found (`Status.Code 90` or HTTP 404) |
+| `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command) |
+| `4` | object not found — only the rare `Status.Code 90` / HTTP 404 (see note) |
+
+> **A missing object code does not exit 4.** Looking up a code that does not exist
+> on `metadata`/`data` returns `Status.Code 104` ("Es gibt keine Objekte zum
+> angegebenen Selektionskriterium") — a valid **empty** result, so the CLI exits
+> **0**, the same as an empty `catalogue`/`find` search. The `90 → 4` mapping is a
+> defensive path the server rarely takes. To detect "no such object" in a script,
+> inspect `Status.Code` in the payload, not the exit code.
 
 ## Gotchas
 
