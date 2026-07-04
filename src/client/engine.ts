@@ -284,7 +284,14 @@ export class RequestEngine {
         if (parsed?.Status && typeof parsed.Status.Content === "string") detail = parsed.Status.Content;
         else if (typeof parsed?.detail === "string") detail = parsed.detail;
       } catch {
-        // Non-JSON error body (e.g. an HTML error page); leave detail undefined.
+        // Not JSON. Surface a short, whitespace-collapsed snippet of a textual
+        // body (e.g. GENESIS' plain-text 500 "…pDirectory is null") so the
+        // failure isn't context-free. Skip HTML/XML error pages (start with "<"),
+        // which are noise to a CLI user.
+        const snippet = text.trim().replace(/\s+/g, " ");
+        if (snippet.length > 0 && !snippet.startsWith("<")) {
+          detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
+        }
       }
     }
     return new DestatisApiError({ httpStatus: status, url: redactUrl(url), method, body: text, detail });

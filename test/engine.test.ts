@@ -114,6 +114,26 @@ test("a 3xx is NOT followed (would forward credential headers) and surfaces as a
   assert.equal(calls, 1); // never followed the redirect
 });
 
+test("surfaces a non-JSON (plain-text) HTTP error body as the error detail", async () => {
+  const mt = makeMockTransport(() =>
+    rawResponse('Cannot read the array length because "pDirectory" is null', "text/plain", 500),
+  );
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/find/find", {}, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && err.httpStatus === 500 && /pDirectory/.test(err.message),
+  );
+});
+
+test("does not surface an HTML error page as the detail (noise)", async () => {
+  const mt = makeMockTransport(() => rawResponse("<html><body>502 Bad Gateway</body></html>", "text/html", 502));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/find/find", {}, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && err.httpStatus === 502 && err.detail === undefined,
+  );
+});
+
 test("the User-Agent and Accept headers are sent", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.tablesList));
   const e = new RequestEngine({ transport: mt.transport, userAgent: "ua/1" });
