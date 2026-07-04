@@ -177,3 +177,20 @@ test("--help exits 0", async () => {
   const cli = makeCli(() => jsonResponse({}));
   assert.equal(await run(["--help"], cli.deps), 0);
 });
+
+test("a commander usage error (bad option value) exits 2, not 1", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  const code = await run([...TOKEN, "--pagelength", "0", "catalogue", "tables"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("a missing required argument exits 2", async () => {
+  const cli = makeCli(() => jsonResponse(fx.findResult));
+  assert.equal(await run([...TOKEN, "find"], cli.deps), 2);
+});
+
+test("an unknown command exits 2", async () => {
+  const cli = makeCli(() => jsonResponse({}));
+  assert.equal(await run(["boguscmd"], cli.deps), 2);
+});

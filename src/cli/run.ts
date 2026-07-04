@@ -30,8 +30,13 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
     return 0;
   } catch (err) {
     if (err instanceof CommanderError) {
-      // Help/version requests exit 0; genuine parse errors carry their own code.
-      return err.exitCode;
+      // Help/version (and bare "no command", which prints help) use commander's
+      // exitCode 0; every other commander error — bad option value, missing or
+      // invalid argument, unknown option/command — is a usage error. Normalise
+      // those to the conventional usage exit code 2 (matching DestatisUsageError)
+      // so scripts get one reliable "usage problem" signal instead of a mix of
+      // 1 and 2. See DEVELOPING.md's exit-code table.
+      return err.exitCode === 0 ? 0 : 2;
     }
     if (err instanceof DestatisUsageError) {
       // Bad/missing arguments or credentials -> conventional usage exit code.
