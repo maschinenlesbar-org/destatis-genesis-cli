@@ -8,7 +8,7 @@ import { Command, Option } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
-import { parseIntArg, parseBoundedInt } from "./shared.js";
+import { parseIntArg, parseBoundedInt, parseHeaderValue } from "./shared.js";
 import { registerHelloCommands } from "./commands/hello.js";
 import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
@@ -65,15 +65,15 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .version(VERSION)
     .option("--base-url <url>", "API base URL", "https://genesis.destatis.de")
-    .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)")
-    .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)")
-    .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)")
+    .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)", parseHeaderValue)
+    .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseHeaderValue)
+    .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseHeaderValue)
     .addOption(
       new Option("--language <lang>", "response language").choices(["de", "en"]).default("de"),
     )
     .option("--pagelength <n>", "max list results (1..25000)", parseBoundedInt(1, 25000))
     .option("--timeout <ms>", "per-request timeout in milliseconds", parseIntArg)
-    .option("--user-agent <ua>", "User-Agent header value")
+    .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option("--max-retries <n>", "retries for transient 429/503 responses", parseIntArg)
     .option(
       "--max-response-bytes <n>",

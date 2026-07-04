@@ -83,6 +83,21 @@ test("an explicit --token overrides DESTATIS_API_TOKEN from the environment", as
   assert.equal(cli.mt.last().headers?.["username"], "0123456789abcdef0123456789abcdef");
 });
 
+test("a control character in --user-agent is rejected before any request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  const code = await run(["hello", "--user-agent", "bad\r\nX-Injected: 1"], cli.deps);
+  assert.notEqual(code, 0);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /control character/i);
+});
+
+test("a control character in a credential (--token) is rejected before any request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  const code = await run(["--token", "tok\r\nX-Injected: 1", "catalogue", "tables"], cli.deps);
+  assert.notEqual(code, 0);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
 test("a blank <term> on find is rejected before any request", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult));
   const code = await run([...TOKEN, "find", "   "], cli.deps);

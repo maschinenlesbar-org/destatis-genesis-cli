@@ -35,6 +35,24 @@ export function parseNonEmpty(value: string): string {
   return value;
 }
 
+/**
+ * commander value-parser for a value that ends up in an HTTP header (credentials,
+ * User-Agent). Rejects control characters — a CR/LF (or other C0/DEL byte) would
+ * otherwise reach Node's HTTP layer and throw an opaque `ERR_INVALID_CHAR`, which
+ * escapes our typed-error handling and surfaces as an ugly "Unexpected error".
+ * Tab (0x09) is allowed; the rest of C0 (0x00..0x08, 0x0A..0x1F) and DEL (0x7F)
+ * are rejected. Checked by char code so the source stays free of control bytes.
+ */
+export function parseHeaderValue(value: string): string {
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if ((c < 0x20 && c !== 0x09) || c === 0x7f) {
+      throw new InvalidArgumentError("Value contains control characters.");
+    }
+  }
+  return value;
+}
+
 /** Build a commander value-parser for an integer constrained to [min, max]. */
 export function parseBoundedInt(min: number, max: number): (value: string) => number {
   return (value: string) => {
