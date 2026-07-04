@@ -74,7 +74,11 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .option("--pagelength <n>", "max list results (1..25000)", parseBoundedInt(1, 25000))
     .option("--timeout <ms>", "per-request timeout in milliseconds", parseIntArg)
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
-    .option("--max-retries <n>", "retries for transient 429/503 responses", parseIntArg)
+    .option(
+      "--max-retries <n>",
+      "retries for transient 429/503 responses (0..10)",
+      parseBoundedInt(0, 10),
+    )
     .option(
       "--max-response-bytes <n>",
       "cap response body size in bytes (0 = unlimited; default 100 MiB)",

@@ -112,6 +112,13 @@ test("--pagelength above the server cap (25000) is rejected client-side", async 
   assert.equal(cli.mt.calls.length, 0);
 });
 
+test("--max-retries above the sane maximum is rejected client-side", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  const code = await run([...TOKEN, "--max-retries", "1000000", "catalogue", "tables"], cli.deps);
+  assert.notEqual(code, 0);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
 test("data table sends the object name to data/table", async () => {
   const cli = makeCli(() => jsonResponse(fx.dataTable));
   const code = await run([...TOKEN, "data", "table", "12411-0001", "--start-year", "2020"], cli.deps);
