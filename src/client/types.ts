@@ -131,10 +131,14 @@ export type MetadataResponse = GenesisEnvelope & { Object: JsonObject };
 
 // --- helloworld (does NOT use the envelope) -------------------------------------
 
-/** `helloworld/whoami` — needs no auth; the ideal first connectivity check. */
+/**
+ * `helloworld/whoami` — needs no auth; the ideal first connectivity check.
+ * `User-IP` is optional: the live endpoint has been observed to return only
+ * `User-Agent`.
+ */
 export interface WhoamiResponse {
   "User-Agent": string;
-  "User-IP": string;
+  "User-IP"?: string;
 }
 
 /**
