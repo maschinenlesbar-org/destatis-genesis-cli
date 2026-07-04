@@ -71,8 +71,12 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .addOption(
       new Option("--language <lang>", "response language").choices(["de", "en"]).default("de"),
     )
-    .option("--pagelength <n>", "max list results (1..25000)", parseBoundedInt(1, 25000))
-    .option("--timeout <ms>", "per-request timeout in milliseconds", parseIntArg)
+    .option(
+      "--pagelength <n>",
+      "max list results for find/catalogue (1..25000; ignored by data/metadata)",
+      parseBoundedInt(1, 25000),
+    )
+    .option("--timeout <ms>", "per-request timeout in ms (0 = no timeout)", parseIntArg)
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option(
       "--max-retries <n>",
