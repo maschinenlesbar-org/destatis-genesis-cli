@@ -144,6 +144,14 @@ test("--output writes JSON to a file and keeps stdout clean", async () => {
   assert.match(cli.err.join("\n"), /Wrote \d+ bytes to \/tmp\/out\.json/);
 });
 
+test("an empty --output is rejected instead of silently writing to stdout", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  const code = await run(["hello", "--output", ""], cli.deps);
+  assert.notEqual(code, 0);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.equal(cli.out.length, 0);
+});
+
 test("--compact prints single-line JSON", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   await run([...TOKEN, "--compact", "catalogue", "tables"], cli.deps);

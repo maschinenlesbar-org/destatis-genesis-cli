@@ -8,7 +8,7 @@ import { Command, Option } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
-import { parseIntArg, parseBoundedInt, parseHeaderValue } from "./shared.js";
+import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty } from "./shared.js";
 import { registerHelloCommands } from "./commands/hello.js";
 import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
@@ -81,7 +81,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
       parseIntArg,
     )
     .option("--compact", "print JSON on a single line instead of pretty-printed")
-    .option("-o, --output <file>", "write output (JSON, or a download) to this file")
+    .option("-o, --output <file>", "write output (JSON, or a download) to this file", parseNonEmpty)
     .showHelpAfterError();
 
   // Seed each credential flag from its env var (trimmed; blank treated as unset).
