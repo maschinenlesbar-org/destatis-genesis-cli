@@ -9,6 +9,7 @@ import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
 import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty, parseBaseUrl } from "./shared.js";
+import { DestatisUsageError } from "../client/errors.js";
 import { registerHelloCommands } from "./commands/hello.js";
 import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
@@ -41,14 +42,27 @@ export const defaultDeps: CliDeps = {
 };
 
 /**
- * Read a credential env var, trimmed. A missing, empty, or whitespace-only value
- * is treated as unset (returns undefined) so it never seeds a blank credential.
+ * Read a credential env var, trimmed, and validate it as an HTTP header value. A
+ * missing, empty, or whitespace-only value is treated as unset (returns
+ * undefined) so it never seeds a blank credential.
+ *
+ * Env values are seeded via setOptionValue, which does NOT run commander's
+ * value-parsers, so an env credential otherwise skips the control-char check
+ * that flag values get. Run it through parseHeaderValue here and re-raise a
+ * control-char rejection as a typed usage error (exit 2) with a clean message,
+ * instead of letting a CR/LF reach Node's HTTP layer as an opaque
+ * ERR_INVALID_CHAR "Unexpected error".
  */
 function readEnv(env: Record<string, string | undefined>, name: string): string | undefined {
   const raw = env[name];
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  if (trimmed.length === 0) return undefined;
+  try {
+    return parseHeaderValue(trimmed);
+  } catch {
+    throw new DestatisUsageError(`Environment variable ${name} contains control characters.`);
+  }
 }
 
 export function buildProgram(deps: CliDeps = defaultDeps): Command {

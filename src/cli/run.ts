@@ -22,10 +22,12 @@ function configureTree(command: Command, deps: CliDeps): void {
 }
 
 export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<number> {
-  const program = buildProgram(deps);
-  configureTree(program, deps);
-
   try {
+    // buildProgram is inside the try: seeding env credentials validates them and
+    // may throw a DestatisUsageError (GEN-06), which must be caught and mapped to
+    // the usage exit code rather than escaping as an uncaught rejection.
+    const program = buildProgram(deps);
+    configureTree(program, deps);
     await program.parseAsync(argv, { from: "user" });
     return 0;
   } catch (err) {

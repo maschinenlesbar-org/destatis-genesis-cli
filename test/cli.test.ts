@@ -99,6 +99,16 @@ test("a control character in a credential (--token) is rejected before any reque
   assert.equal(cli.mt.calls.length, 0);
 });
 
+test("a control character in an env credential is rejected before any request (GEN-06)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList), {
+    DESTATIS_API_TOKEN: `tok${String.fromCharCode(0x0d)}${String.fromCharCode(0x0a)}X-Injected: 1`,
+  });
+  const code = await run(["catalogue", "tables", "124"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /DESTATIS_API_TOKEN contains control characters/);
+});
+
 test("a blank <term> on find is rejected before any request", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult));
   const code = await run([...TOKEN, "find", "   "], cli.deps);
