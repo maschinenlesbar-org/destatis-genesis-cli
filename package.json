@@ -1,6 +1,6 @@
 {
   "name": "@maschinenlesbar.org/destatis-genesis-cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "TypeScript API client and CLI for the DESTATIS GENESIS-Online REST API (www-genesis.destatis.de)",
   "type": "module",
   "bin": {
