@@ -66,6 +66,26 @@ test("--token sends the token in the username header", async () => {
   assert.equal(bodyOf(req).get("selection"), "124*");
 });
 
+test("a credential passed via --token warns to stderr, recommending the env var (GEN-01)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  const code = await run([...TOKEN, "catalogue", "tables", "124*"], cli.deps);
+  assert.equal(code, 0);
+  const errText = cli.err.join("\n");
+  assert.match(errText, /command line are visible in the process list/);
+  assert.match(errText, /DESTATIS_API_TOKEN/);
+  // The credential value itself is never printed.
+  assert.doesNotMatch(errText, /0123456789abcdef/);
+});
+
+test("a credential from the environment does NOT trigger the argv warning (GEN-01)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.findResult), {
+    DESTATIS_API_TOKEN: "envtoken0000000000000000000000ab",
+  });
+  const code = await run(["find", "Bevölkerung"], cli.deps);
+  assert.equal(code, 0);
+  assert.doesNotMatch(cli.err.join("\n"), /visible in the process list/);
+});
+
 test("DESTATIS_API_TOKEN from the environment seeds the credential", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult), {
     DESTATIS_API_TOKEN: "envtoken0000000000000000000000ab",

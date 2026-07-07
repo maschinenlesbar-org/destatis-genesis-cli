@@ -27,6 +27,13 @@ credential is bundled with this tool.
 Precedence per field is **flag > env var > unset**; a token takes precedence over
 username/password. Only `destatis hello` works without credentials.
 
+> **Prefer the environment variables.** A credential passed as a `--token` /
+> `--username` / `--password` **flag** is visible in the process table (`ps`,
+> `/proc`) to other local users and is persisted in your shell history — the
+> account *password* is especially sensitive. The CLI prints a one-line stderr
+> warning when it detects a flag-supplied credential. Set the env var instead; it
+> takes effect whenever the corresponding flag is absent.
+
 ```bash
 export DESTATIS_API_TOKEN="your-32-char-token"
 ```

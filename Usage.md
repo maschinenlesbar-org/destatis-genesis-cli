@@ -7,7 +7,9 @@ statistic `12411`) — find them with `find` / `catalogue`.
 
 ## Credentials & global options
 
-Set credentials once (see [README](README.md)):
+Set credentials once (see [README](README.md)). Prefer the **environment
+variables** over the flags: a credential passed as a flag is visible in the
+process table and shell history, so the CLI warns to stderr when it detects one.
 
 ```bash
 export DESTATIS_API_TOKEN="…"          # or DESTATIS_USERNAME + DESTATIS_PASSWORD
@@ -26,6 +28,7 @@ Global options (valid on any command):
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
 | `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout |
+| `--force` | overwrite the `--output` file if it already exists (otherwise the write is refused) |
 
 ## hello / logincheck
 

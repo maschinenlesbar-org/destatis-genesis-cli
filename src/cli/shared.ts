@@ -218,6 +218,43 @@ export interface ActionContext {
   opts: Record<string, unknown>;
 }
 
+/** The root program: credential options and their sources live on it. */
+function rootCommand(command: Command): Command {
+  let c = command;
+  while (c.parent) c = c.parent;
+  return c;
+}
+
+/**
+ * Warn (once, to stderr) when a credential arrived on the command line rather
+ * than via its env var. Argv is visible in the process table (ps / /proc) and is
+ * persisted in shell history, so a flag-supplied credential — especially the
+ * account *password* — is exposed to other local users and to disk. The env var
+ * is the preferred path (and takes effect whenever the flag is absent).
+ *
+ * commander records an explicit flag as source "cli"; an env value seeded via
+ * setOptionValue has source undefined, so this fires only for the argv path and
+ * never for the env path. The credential value itself is never printed.
+ */
+function warnArgvCredentials(deps: CliDeps, command: Command): void {
+  const root = rootCommand(command);
+  const flagged: string[] = [];
+  const check: Array<{ opt: string; env: string }> = [
+    { opt: "token", env: "DESTATIS_API_TOKEN" },
+    { opt: "username", env: "DESTATIS_USERNAME" },
+    { opt: "password", env: "DESTATIS_PASSWORD" },
+  ];
+  for (const { opt, env } of check) {
+    if (root.getOptionValueSource(opt) === "cli") flagged.push(`--${opt} (env ${env})`);
+  }
+  if (flagged.length > 0) {
+    deps.io.err(
+      `Warning: credential(s) passed on the command line are visible in the process ` +
+        `list and shell history. Prefer the environment variable(s): ${flagged.join(", ")}.`,
+    );
+  }
+}
+
 /**
  * Wrap an async command action with credential resolution, an optional auth
  * guard, and client construction. The callback receives a context (client +
@@ -244,6 +281,7 @@ export function action(
           "A free account is available at https://www-genesis.destatis.de.",
       );
     }
+    if (creds.present) warnArgvCredentials(deps, command);
     const client = deps.createClient(toClientOptions(global, creds));
     await fn({ client, global, opts: command.opts() }, positionals);
   };
