@@ -5,6 +5,10 @@ import { DestatisApiError, DestatisParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
+// Built via char codes so no raw control bytes ever appear in this source file.
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+
 test("buildUrl normalises the path (parameters travel in the body)", () => {
   const e = new RequestEngine({ baseUrl: "https://example.test/" });
   assert.equal(e.buildUrl("api/"), "https://example.test/api/");
@@ -123,6 +127,41 @@ test("surfaces a non-JSON (plain-text) HTTP error body as the error detail", asy
     () => e.postJson("/find/find", {}, { username: "TOK" }),
     (err) => err instanceof DestatisApiError && err.httpStatus === 500 && /pDirectory/.test(err.message),
   );
+});
+
+test("strips terminal control characters from a plain-text error detail (GEN-03)", async () => {
+  const hostile = `boom${ESC}[31m${BEL} injected`;
+  const mt = makeMockTransport(() => rawResponse(hostile, "text/plain", 500));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/find/find", {}, { username: "TOK" }),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.ok(!err.message.includes(ESC), "ESC survived into the message");
+      assert.ok(!err.message.includes(BEL), "BEL survived into the message");
+      assert.match(err.message, /boom.*injected/);
+      return true;
+    },
+  );
+});
+
+test("strips terminal control characters from a logical Status.Content (GEN-03)", async () => {
+  const body = { Status: { Code: 90, Type: "Fehler", Content: `clean${ESC}text` } };
+  const mt = makeMockTransport(() => jsonResponse(body));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/x", {}, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && !err.message.includes(ESC) && /cleantext/.test(err.message),
+  );
+});
+
+test("strips terminal control characters from the echoed Content-Type (GEN-03)", async () => {
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+  const mt = makeMockTransport(() => rawResponse(zip, `application/zip${ESC}[31m`));
+  const e = new RequestEngine({ transport: mt.transport });
+  const res = await e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" });
+  assert.ok(!res.contentType.includes(ESC));
+  assert.equal(res.contentType, "application/zip[31m");
 });
 
 test("does not surface an HTML error page as the detail (noise)", async () => {

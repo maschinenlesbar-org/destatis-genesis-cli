@@ -63,6 +63,30 @@ const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Strip terminal control characters from a server-controlled string before it
+ * can reach stdout/stderr. A hostile or MITM'd endpoint can embed ANSI escape
+ * sequences (or other C0/C1 controls) in `Status.Content`, a plain-text error
+ * body, or the `Content-Type` header to spoof terminal output or abuse terminal
+ * features. We drop C0 (0x00..0x08, 0x0B..0x1F), DEL (0x7F) and C1 (0x80..0x9F);
+ * tab (0x09), newline (0x0A) and carriage return (0x0D) are kept so multi-line
+ * messages survive. Implemented as a code-point filter so this source file never
+ * contains a raw control byte.
+ */
+function sanitizeServerText(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    const n = ch.codePointAt(0) ?? 0;
+    if (n === 0x09 || n === 0x0a || n === 0x0d) {
+      out += ch;
+      continue;
+    }
+    if (n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f)) continue;
+    out += ch;
+  }
+  return out;
+}
+
+/**
  * Mask credentials in a URL before it appears in an error message. Defensive:
  * this client sends credentials in headers (not the query string), but a caller
  * who overrides the transport or base URL could still put them in the URL, so
@@ -167,7 +191,9 @@ export class RequestEngine {
         continue;
       }
 
-      const contentType = String(response.headers["content-type"] ?? "");
+      // Sanitize the server-controlled Content-Type at the source: it is echoed
+      // to stderr by renderRaw, so strip any embedded terminal control chars.
+      const contentType = sanitizeServerText(String(response.headers["content-type"] ?? ""));
       if (status < 200 || status >= 300) {
         throw this.toApiError(method, url, status, response.body);
       }
@@ -255,8 +281,10 @@ export class RequestEngine {
     const code = typeof s.Code === "number" ? s.Code : undefined;
     if (code === undefined || code === CODE_EMPTY) return;
 
-    const type = typeof s.Type === "string" ? s.Type : undefined;
-    const content = typeof s.Content === "string" ? s.Content : undefined;
+    // Type / Content are server-controlled and reach the terminal via the error
+    // message; strip any embedded terminal control characters at the source.
+    const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
+    const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
     const isErrorType = type !== undefined && /error|fehler/i.test(type);
 
     if (code === CODE_NOT_FOUND || code === CODE_TOO_LARGE || isErrorType) {
@@ -294,12 +322,16 @@ export class RequestEngine {
         // Not JSON. Surface a short, whitespace-collapsed snippet of a textual
         // body (e.g. GENESIS' plain-text 500 "…pDirectory is null") so the
         // failure isn't context-free. Skip HTML/XML error pages (start with "<"),
-        // which are noise to a CLI user.
+        // which are noise to a CLI user. The `\s+` collapse leaves ESC/C0 controls
+        // intact, so sanitize below.
         const snippet = text.trim().replace(/\s+/g, " ");
         if (snippet.length > 0 && !snippet.startsWith("<")) {
           detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
         }
       }
+      // Both branches take server-controlled text; strip terminal control chars
+      // before it reaches stderr.
+      if (detail !== undefined) detail = sanitizeServerText(detail);
     }
     return new DestatisApiError({ httpStatus: status, url: redactUrl(url), method, body: text, detail });
   }
