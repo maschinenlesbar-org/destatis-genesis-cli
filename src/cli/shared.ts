@@ -36,6 +36,32 @@ export function parseNonEmpty(value: string): string {
 }
 
 /**
+ * commander value-parser for --base-url: accept only an absolute http/https URL,
+ * and reject one carrying embedded userinfo (`https://user:pass@host`). Rejecting
+ * at parse time yields the conventional usage exit code (2) instead of a later
+ * runtime failure, and closes the only way credentials could end up in a URL —
+ * so they cannot leak into an error message or become a Basic Authorization
+ * header. GENESIS never uses Basic auth, so userinfo has no legitimate use here.
+ */
+export function parseBaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new InvalidArgumentError("Must be an absolute http(s) URL.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new InvalidArgumentError('Only "http:" and "https:" URLs are allowed.');
+  }
+  if (url.username || url.password) {
+    throw new InvalidArgumentError(
+      "Must not embed credentials (user:pass@host). Use --token or --username/--password.",
+    );
+  }
+  return value;
+}
+
+/**
  * commander value-parser for a value that ends up in an HTTP header (credentials,
  * User-Agent). Rejects control characters — a CR/LF (or other C0/DEL byte) would
  * otherwise reach Node's HTTP layer and throw an opaque `ERR_INVALID_CHAR`, which

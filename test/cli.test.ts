@@ -225,3 +225,22 @@ test("an unknown command exits 2", async () => {
   const cli = makeCli(() => jsonResponse({}));
   assert.equal(await run(["boguscmd"], cli.deps), 2);
 });
+
+test("a non-http(s) --base-url is rejected at parse time with exit 2 (GEN-05)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  const code = await run(["--base-url", "file:///etc/passwd", "hello"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("a --base-url with embedded userinfo is rejected at parse time (GEN-05/GEN-02)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  const code = await run(["--base-url", "https://USER:PASS@genesis.destatis.de", "hello"], cli.deps);
+  // Rejected before any request is issued, with the conventional usage exit code.
+  // (commander echoes the user's own argv value in its usage error; the GEN-02
+  // leak this closes is credentials reaching *API error messages / CI logs* on a
+  // later HTTP error, which redactUrl now also masks.)
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /Must not embed credentials/);
+});

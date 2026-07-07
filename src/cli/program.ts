@@ -8,7 +8,7 @@ import { Command, Option } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
-import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty } from "./shared.js";
+import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty, parseBaseUrl } from "./shared.js";
 import { registerHelloCommands } from "./commands/hello.js";
 import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
@@ -64,7 +64,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
         "Register at https://www-genesis.destatis.de; `destatis hello` needs no credentials.",
     )
     .version(VERSION)
-    .option("--base-url <url>", "API base URL", "https://genesis.destatis.de")
+    .option("--base-url <url>", "API base URL", parseBaseUrl, "https://genesis.destatis.de")
     .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)", parseHeaderValue)
     .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseHeaderValue)
     .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseHeaderValue)
