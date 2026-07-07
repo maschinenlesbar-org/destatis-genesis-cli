@@ -63,10 +63,14 @@ const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Mask credential query parameters in a URL before it appears in an error
- * message. Defensive: this client sends credentials in headers (not the query
- * string), but a caller who overrides the transport or base URL could still put
- * them in the URL, so any URL surfaced in an error is scrubbed.
+ * Mask credentials in a URL before it appears in an error message. Defensive:
+ * this client sends credentials in headers (not the query string), but a caller
+ * who overrides the transport or base URL could still put them in the URL, so
+ * any URL surfaced in an error is scrubbed. Two channels are masked:
+ *  - the `username` / `password` **query parameters** (legacy GENESIS style), and
+ *  - the URL **userinfo** component (`https://user:pass@host`), which Node turns
+ *    into a Basic `Authorization` header — otherwise `user:pass@` would leak
+ *    verbatim into stderr / CI logs on any error.
  */
 export function redactUrl(rawUrl: string): string {
   try {
@@ -74,6 +78,9 @@ export function redactUrl(rawUrl: string): string {
     for (const key of ["username", "password"]) {
       if (u.searchParams.has(key)) u.searchParams.set(key, "***");
     }
+    // Strip any embedded userinfo so a credentialed base URL is not logged.
+    if (u.username) u.username = "***";
+    if (u.password) u.password = "***";
     return u.toString();
   } catch {
     return rawUrl;

@@ -164,3 +164,22 @@ test("redactUrl masks username and password query parameters", () => {
   assert.match(masked, /username=%2A%2A%2A|username=\*\*\*/);
   assert.doesNotMatch(masked, /SECRET|HUNTER2/);
 });
+
+test("redactUrl masks URL userinfo (basic-auth credentials in the base URL)", () => {
+  const masked = redactUrl("https://SECRETUSER:HUNTER2@genesis.destatis.de/x?name=1");
+  assert.doesNotMatch(masked, /SECRETUSER|HUNTER2/);
+  // The host and path survive; only the credentials are scrubbed.
+  assert.match(masked, /genesis\.destatis\.de\/x/);
+});
+
+test("a base URL with embedded userinfo does not leak into the error message", async () => {
+  const mt = makeMockTransport(() => rawResponse("nope", "text/plain", 500));
+  const e = new RequestEngine({
+    baseUrl: "https://SECRETUSER:HUNTER2@genesis.destatis.de",
+    transport: mt.transport,
+  });
+  await assert.rejects(
+    () => e.postJson("/find/find", {}, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && !/SECRETUSER|HUNTER2/.test(err.message),
+  );
+});
