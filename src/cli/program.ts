@@ -90,6 +90,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .option("--compact", "print JSON on a single line instead of pretty-printed")
     .option("-o, --output <file>", "write output (JSON, or a download) to this file", parseNonEmpty)
+    .option("--force", "overwrite the --output file if it already exists")
     .showHelpAfterError();
 
   // Seed each credential flag from its env var (trimmed; blank treated as unset).

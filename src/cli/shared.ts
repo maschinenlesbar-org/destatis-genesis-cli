@@ -76,6 +76,7 @@ export interface GlobalOptions {
   maxResponseBytes?: number;
   compact?: boolean;
   output?: string;
+  force?: boolean;
 }
 
 function trimmed(value: string | undefined): string | undefined {
@@ -131,6 +132,27 @@ export function toClientOptions(global: GlobalOptions, creds: ResolvedCredential
 }
 
 /**
+ * Write bytes to the --output file, guarding against an accidental overwrite and
+ * wrapping raw filesystem errors in a typed usage error. Refuses to clobber an
+ * existing file unless --force is set (fail-secure: no silent data loss), and
+ * turns an ENOENT/EISDIR/EACCES from writeFile into a clean DestatisUsageError
+ * instead of an untyped "Unexpected error: ENOENT: …".
+ */
+function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, data: Buffer): void {
+  if (!global.force && deps.io.fileExists(path)) {
+    throw new DestatisUsageError(
+      `Refusing to overwrite existing file "${path}". Pass --force to overwrite, or choose a different --output path.`,
+    );
+  }
+  try {
+    deps.io.writeFile(path, data);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new DestatisUsageError(`Could not write to "${path}": ${reason}`);
+  }
+}
+
+/**
  * Render a JSON value, pretty by default and compact with --compact. Writes to
  * the file given by --output (with a short stderr confirmation so stdout stays
  * clean for piping), or to stdout otherwise.
@@ -139,7 +161,7 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
   const text = global.compact ? JSON.stringify(value) : JSON.stringify(value, null, 2);
   if (global.output) {
     const data = Buffer.from(text + "\n", "utf8");
-    deps.io.writeFile(global.output, data);
+    writeOutputFile(deps, global, global.output, data);
     deps.io.err(`Wrote ${data.length} bytes to ${global.output}`);
   } else {
     deps.io.out(text);
@@ -155,7 +177,7 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
 export function renderRaw(deps: CliDeps, global: GlobalOptions, response: RawResponse): void {
   const typeNote = response.contentType ? ` (Content-Type: ${response.contentType})` : "";
   if (global.output) {
-    deps.io.writeFile(global.output, response.data);
+    writeOutputFile(deps, global, global.output, response.data);
     deps.io.err(`Wrote ${response.data.length} bytes to ${global.output}${typeNote}`);
   } else {
     deps.io.outBinary(response.data);

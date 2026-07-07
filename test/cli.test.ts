@@ -21,6 +21,7 @@ function makeCli(
       out: (s) => out.push(s),
       err: (s) => err.push(s),
       writeFile: (p, d) => files.set(p, d),
+      fileExists: (p) => files.has(p),
       outBinary: (d) => out.push(d.toString("utf8")),
     },
     createClient: (opts) => new DestatisClient({ ...opts, transport: mt.transport }),
@@ -149,6 +150,36 @@ test("--output writes JSON to a file and keeps stdout clean", async () => {
   assert.match(cli.files.get("/tmp/out.json")?.toString("utf8") ?? "", /12411-0001/);
   assert.equal(cli.out.length, 0);
   assert.match(cli.err.join("\n"), /Wrote \d+ bytes to \/tmp\/out\.json/);
+});
+
+test("--output refuses to overwrite an existing file without --force (GEN-04)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  cli.files.set("/tmp/out.json", Buffer.from("existing"));
+  const code = await run([...TOKEN, "--output", "/tmp/out.json", "catalogue", "tables"], cli.deps);
+  assert.equal(code, 2);
+  // The pre-existing file is untouched, and nothing was written to stdout.
+  assert.equal(cli.files.get("/tmp/out.json")?.toString("utf8"), "existing");
+  assert.equal(cli.out.length, 0);
+  assert.match(cli.err.join("\n"), /Refusing to overwrite/);
+});
+
+test("--force allows overwriting an existing --output file (GEN-04)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  cli.files.set("/tmp/out.json", Buffer.from("existing"));
+  const code = await run([...TOKEN, "--force", "--output", "/tmp/out.json", "catalogue", "tables"], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.files.get("/tmp/out.json")?.toString("utf8") ?? "", /12411-0001/);
+});
+
+test("a filesystem write error surfaces as a typed usage error, not Unexpected (GEN-04)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  cli.deps.io.writeFile = () => {
+    throw new Error("EACCES: permission denied, open '/root/out.json'");
+  };
+  const code = await run([...TOKEN, "--output", "/root/out.json", "catalogue", "tables"], cli.deps);
+  assert.equal(code, 2);
+  assert.match(cli.err.join("\n"), /Could not write to .*EACCES/);
+  assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
 });
 
 test("an empty --output is rejected instead of silently writing to stdout", async () => {
