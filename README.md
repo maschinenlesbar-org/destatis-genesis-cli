@@ -1,5 +1,7 @@
 # destatis-genesis-cli
 
+**Website:** [English](https://maschinenlesbar-org.github.io/destatis-genesis-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/destatis-genesis-cli/de/) — command reference, guides and API docs
+
 A TypeScript **API client and CLI** for the **DESTATIS GENESIS-Online REST API**
 (version 2020) — the German Federal Statistical Office's official-statistics
 database at [www-genesis.destatis.de](https://www-genesis.destatis.de).

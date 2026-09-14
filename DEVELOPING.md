@@ -166,3 +166,22 @@ work end to end:
 - Whether to add HTTP 500 to the retry set (currently no — a 500 may be a real
   error, not only throttling).
 - The async batch-job flow (below) — never exercised.
+
+## Website
+
+The project website — <https://maschinenlesbar-org.github.io/destatis-genesis-cli/> in English
+and <https://maschinenlesbar-org.github.io/destatis-genesis-cli/de/> in German — is built from
+`site/` with [Jekyll](https://jekyllrb.com/), [banira](https://sebs.github.io/banira/) web
+components and [Fylgja](https://fylgja.dev/) CSS, and deployed by `docs.yml` together with the
+TypeDoc API reference under `/api/`. Its content comes from this repository: the README intro
+and quick start, the command tree of the built CLI (`site/scripts/cli-reference.mjs`),
+`Usage.md`, `GLOSSARY.md` and the skills. The only repo-specific files are `site/_config.yml`
+and `site/_data/project.yml` (the German intro and the access requirements); the rest of `site/`
+is identical in every maschinenlesbar.org CLI, so change it in all of them together. When the
+README intro changes, update the German intro in `site/_data/project.yml`.
+
+```bash
+npm run build                        # the CLI, for the command reference
+cd site && npm ci && bundle install  # once (Node >= 22.12, Ruby 3.4, Bundler)
+npm run serve                        # http://127.0.0.1:4000/destatis-genesis-cli/
+```
