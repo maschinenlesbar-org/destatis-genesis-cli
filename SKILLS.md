@@ -1,9 +1,9 @@
 # Skills
 
-`destatis-genesis-cli` ships **Claude Code Agent Skills** as a plugin
-marketplace, so Claude can drive the `destatis` CLI for common
-official-statistics tasks. The skills **validate** that the `destatis` CLI is on
-your PATH and tell you if it is missing — they never install anything.
+`destatis-genesis-cli` ships **Claude Code Agent Skills** as a Claude Code
+plugin, so Claude can drive the `destatis` CLI for common official-statistics
+tasks. The skills **validate** that the `destatis` CLI is on your PATH and tell
+you if it is missing — they never install anything.
 
 | Skill | Use it when you want to… |
 |---|---|
@@ -22,11 +22,18 @@ They compose: **finder → data-fetch** (or **→ table-download**).
 
 ## Installing the plugin
 
-This repo is a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`
-+ `.claude-plugin/plugin.json` + `skills/`). Add it as a marketplace in Claude
-Code to enable the three skills. The `skills/` and `.claude-plugin/` files are
-**not** shipped in the npm tarball — the published package is the client/CLI
-only.
+This repo is a Claude Code plugin (`.claude-plugin/plugin.json` + `skills/`),
+published as `destatis-genesis` in the
+[maschinenlesbar.org plugin marketplace](https://github.com/maschinenlesbar-org/plugins).
+Install it inside Claude Code to enable the three skills:
+
+```
+/plugin marketplace add maschinenlesbar-org/plugins
+/plugin install destatis-genesis@maschinenlesbar
+```
+
+The `skills/` and `.claude-plugin/` files are **not** shipped in the npm tarball
+— the published package is the client/CLI only.
 
 The data these skills surface is Destatis's, under DL-DE-BY-2.0 — see
 [DATA_LICENSE.md](DATA_LICENSE.md). Cite the `Copyright` field from each response.
