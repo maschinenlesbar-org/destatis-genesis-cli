@@ -93,6 +93,15 @@ in a `Status` object (`{ Code, Content, Type }`). After a successful parse,
 | `98` | too large → `DestatisApiError` with narrowing guidance (exit 1) |
 | any `Type` = `Fehler`/`Error` | → `DestatisApiError` (exit 1) |
 
+Auth failures skip the envelope: GENESIS sends a flat `{ Code, Content, Type }`
+body on a non-2xx status, which `toApiError` does not parse (it reads only
+`Status.Content` or `detail`), so the error has no `detail`:
+
+| Flat `Code` | HTTP | Handling |
+|---|---|---|
+| `15` (not authorized / credentials not recognized) | 401 | `DestatisApiError` + credentials hint (exit 1) |
+| `2` (wrong username/password or token) | **404** | `isNotFound` fires on the 404 → **exit 4**, no hint (seen live on 2026-09-15 for both a wrong login and a wrong token) |
+
 Key off the numeric `Code`, never the German/English `Type` text alone.
 `DestatisApiError` carries both an optional HTTP `httpStatus` (transport/auth
 failures) and an optional logical `code` (`Status.Code`); `run.ts` branches on
@@ -162,7 +171,11 @@ work end to end:
 ## Still open
 
 - Full `Status.Code` catalogue for finer exit-code mapping (only 0/22/50/90/98/104
-  observed).
+  observed in the envelope; 2 and 15 in flat auth-error bodies).
+- Wrong credentials exit 4 (see §2). regionalstatistik-cli fixed the same code:
+  `isNotFound` ignores a 404 that carries a GENESIS code, `toApiError` reads flat
+  bodies, and an `isAuthError` drives the hint, so bad credentials exit 1 with the
+  GENESIS text.
 - Whether to add HTTP 500 to the retry set (currently no — a 500 may be a real
   error, not only throttling).
 - The async batch-job flow (below) — never exercised.
