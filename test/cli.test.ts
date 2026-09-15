@@ -248,6 +248,17 @@ test("logincheck requires credentials", async () => {
   assert.equal(cli.mt.calls.length, 0);
 });
 
+test("--timeout accepts up to the largest timer Node supports", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  assert.equal(await run(["--timeout", "2147483647", "hello"], cli.deps), 0);
+  assert.equal(cli.mt.last().timeoutMs, 2_147_483_647);
+
+  const over = makeCli(() => jsonResponse(fx.whoami));
+  assert.equal(await run(["--timeout", "2147483648", "hello"], over.deps), 2);
+  assert.equal(over.mt.calls.length, 0);
+  assert.match(over.err.join("\n"), /Must be <= 2147483647/);
+});
+
 test("--help exits 0", async () => {
   const cli = makeCli(() => jsonResponse({}));
   assert.equal(await run(["--help"], cli.deps), 0);

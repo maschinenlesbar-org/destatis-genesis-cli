@@ -24,7 +24,7 @@ Global options (valid on any command):
 | `--base-url <url>` | API base (default `https://genesis.destatis.de`) |
 | `--language <de\|en>` | response language (default `de`; English data labels are partial) |
 | `--pagelength <n>` | max list results, `1..25000` (server default 100) |
-| `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning |
+| `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`) |
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
 | `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout |

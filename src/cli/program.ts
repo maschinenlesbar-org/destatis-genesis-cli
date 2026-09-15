@@ -8,6 +8,7 @@ import { Command, Option } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
+import { MAX_TIMEOUT_MS } from "../client/http.js";
 import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty, parseBaseUrl } from "./shared.js";
 import { DestatisUsageError } from "../client/errors.js";
 import { registerHelloCommands } from "./commands/hello.js";
@@ -90,7 +91,11 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
       "max list results for find/catalogue (1..25000; ignored by data/metadata)",
       parseBoundedInt(1, 25000),
     )
-    .option("--timeout <ms>", "time limit per request in ms, whole response included (0 = no timeout)", parseIntArg)
+    .option(
+      "--timeout <ms>",
+      "time limit per request in ms, whole response included (0 = no timeout)",
+      parseBoundedInt(0, MAX_TIMEOUT_MS),
+    )
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option(
       "--max-retries <n>",
