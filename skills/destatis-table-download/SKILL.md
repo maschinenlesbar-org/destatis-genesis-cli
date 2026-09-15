@@ -31,7 +31,9 @@ have it. Cite the response's `Copyright` for attribution (DL-DE-BY-2.0).
 
 Pick a concrete path and **confirm it with the user**, and **avoid clobbering an
 existing file** — if the target exists, ask before overwriting or choose a new
-name. The download is a ZIP, so use a `.zip` extension.
+name. The CLI itself refuses an existing `-o` target (exit `2`, "Refusing to
+overwrite existing file") unless `--force` is passed, so add `--force` only after
+the user has agreed to overwrite. The download is a ZIP, so use a `.zip` extension.
 
 ## Step 2 — Download
 
@@ -81,6 +83,6 @@ Unzip with: unzip population.zip
   tables — narrow the selection; the async job flow is not supported.
 - **Not found is exit 4** (`Status.Code 90`) — re-check the code.
 - **Confirm the path and don't silently overwrite** — this skill writes to the
-  user's filesystem.
+  user's filesystem; the CLI refuses existing targets without `--force`.
 - A tiny output file usually means an error envelope was returned instead of the
   ZIP — verify before telling the user it succeeded.
