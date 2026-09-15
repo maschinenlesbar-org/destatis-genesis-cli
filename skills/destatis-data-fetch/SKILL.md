@@ -57,9 +57,10 @@ locale:
 - **Decimal comma, thousands dot** — `84.669.326` is ~84.7 million;
   `1.234,5` is 1234.5. Convert before doing arithmetic.
 - **Value-status symbols** appear instead of numbers: `-` (none / nil), `.`
-  (unknown or confidential), `...` (not yet available), `/` (not meaningful),
-  `x` (not applicable), `()` (limited value), `p` (provisional), `r` (revised),
-  `s` (estimated). Report these as-is; never coerce them to `0`.
+  (unknown or confidential), `...` (not yet available), `/` (no figure: value
+  not reliable enough), `x` (no meaningful statement possible), `()` (limited
+  value), `p` (provisional), `r` (revised), `s` (estimated). Report these
+  as-is; never coerce them to `0`.
 - The leading lines are headers (statistic code, dimension labels); the data rows
   follow. Read the `Object.Structure` (add `--structure`) if you need the
   dimension tree to label columns.

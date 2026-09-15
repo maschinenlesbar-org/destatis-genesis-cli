@@ -62,8 +62,9 @@ Der HTTP-Status ist fast immer `200`; das tatsächliche Ergebnis steht in `Statu
 
 In einer CSV aus `data/table` kann eine Zelle statt einer Zahl ein Statuszeichen enthalten:
 `-` (nichts vorhanden / tatsächlich null), `.` (unbekannt oder geheim), `...`
-(noch nicht verfügbar), `/` (nicht sinnvoll), `x` (nicht zutreffend), `()` (eingeschränkter
-Aussagewert), `p` (vorläufig), `r` (berichtigt), `s` (geschätzt).
+(noch nicht verfügbar), `/` (keine Angabe, da Zahlenwert nicht sicher genug), `x` (keine
+sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufig),
+`r` (berichtigt), `s` (geschätzt).
 
 ## Begriffe zur Authentifizierung
 

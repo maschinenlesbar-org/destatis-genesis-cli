@@ -61,8 +61,9 @@ HTTP is almost always `200`; the real outcome is `Status.Code`:
 
 In a `data/table` CSV, a cell may be a status symbol instead of a number:
 `-` (nothing to report / genuine zero context), `.` (unknown/secret), `...`
-(not yet available), `/` (not meaningful), `x` (not applicable), `()` (limited
-informative value), `p` (provisional), `r` (revised), `s` (estimated).
+(not yet available), `/` (no figure: value not reliable enough), `x` (no
+meaningful statement possible), `()` (limited informative value), `p`
+(provisional), `r` (revised), `s` (estimated).
 
 ## Auth terms
 
