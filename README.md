@@ -87,6 +87,20 @@ The client is usable independently of the CLI. Errors are typed
   [LICENSING.md](LICENSING.md). External code contributions are not accepted
   ([CONTRIBUTING.md](CONTRIBUTING.md)); bug reports and forks are welcome.
 
+## Claude Code skills
+
+Three [Agent Skills](SKILLS.md) teach Claude Code to use this CLI for real questions:
+turn a topic into a GENESIS object code (**destatis-statistics-finder**), fetch and decode its
+numbers (**destatis-data-fetch**), and export tables to CSV or Excel
+(**destatis-table-download**). Install them from the maschinenlesbar.org marketplace:
+
+```
+/plugin marketplace add maschinenlesbar-org/plugins
+/plugin install destatis-genesis@maschinenlesbar
+```
+
+See **[SKILLS.md](SKILLS.md)** for details.
+
 ## Development
 
 ```bash
