@@ -4,6 +4,7 @@ import { DestatisClient, type DestatisClientOptions } from "../src/client/client
 import { makeMockTransport, jsonResponse, bodyOf, type MockTransport } from "./helpers.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import * as fx from "./fixtures.js";
+import { DestatisNetworkError } from "../src/client/errors.js";
 
 function client(
   responder: (req: HttpRequest) => HttpResponse,
@@ -97,4 +98,15 @@ test("a blank token is treated as unset (no credential header)", async () => {
   const { c, mt } = client(() => jsonResponse(fx.tablesList), { token: "   " });
   await c.catalogue.tables({});
   assert.equal(mt.last().headers?.["username"], undefined);
+});
+
+test("a client with a custom transport rejects a non-http(s) base URL before sending credentials", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => jsonResponse(fx.whoami));
+    assert.throws(
+      () => new DestatisClient({ baseUrl, username: "USER", password: "PASS", transport: mt.transport }),
+      (err) => err instanceof DestatisNetworkError && /Unsupported protocol/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
 });

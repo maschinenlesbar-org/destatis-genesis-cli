@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RequestEngine, redactUrl } from "../src/client/engine.js";
-import { DestatisApiError, DestatisParseError } from "../src/client/errors.js";
+import { DestatisApiError, DestatisNetworkError, DestatisParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -220,5 +220,32 @@ test("a base URL with embedded userinfo does not leak into the error message", a
   await assert.rejects(
     () => e.postJson("/find/find", {}, { username: "TOK" }),
     (err) => err instanceof DestatisApiError && !/SECRETUSER|HUNTER2/.test(err.message),
+  );
+});
+
+test("a non-http(s) base URL is rejected at construction, before any request", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => jsonResponse(fx.whoami));
+    assert.throws(
+      () => new RequestEngine({ baseUrl, transport: mt.transport }),
+      (err) => err instanceof DestatisNetworkError && /Unsupported protocol/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
+});
+
+test("an unparseable base URL is rejected at construction", () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.whoami));
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "not a url", transport: mt.transport }),
+    (err) => err instanceof DestatisNetworkError && /Invalid base URL/.test(err.message),
+  );
+  assert.equal(mt.calls.length, 0);
+});
+
+test("the base-URL scheme error does not leak embedded userinfo", () => {
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "ftp://SECRETUSER:HUNTER2@example.org" }),
+    (err) => err instanceof DestatisNetworkError && !/SECRETUSER|HUNTER2/.test(err.message),
   );
 });
