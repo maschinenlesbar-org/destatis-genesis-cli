@@ -8,8 +8,12 @@ description: >
   "fetch the GDP time series", or has an EVAS code and wants the values narrowed
   by year and region. Handles the year/region/classifying filters and decodes the
   ";"-delimited German-format CSV that arrives inside Object.Content.
-version: 1.0.0
-userInvocable: true
+compatibility: >
+  Requires the `destatis` CLI (npm package
+  @maschinenlesbar.org/destatis-genesis-cli) on PATH, installed by the user; the
+  skill never installs it. Network access to genesis.destatis.de. Needs a
+  registered GENESIS account: --token or DESTATIS_API_TOKEN, or
+  --username/--password or DESTATIS_USERNAME/DESTATIS_PASSWORD.
 ---
 
 # DESTATIS Data Fetch

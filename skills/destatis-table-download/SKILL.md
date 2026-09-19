@@ -8,8 +8,12 @@ description: >
   wants a spreadsheet-ready file rather than JSON in the terminal. Writes the
   server-rendered download (a ZIP) to a path you confirm, and reports what was
   written.
-version: 1.0.0
-userInvocable: true
+compatibility: >
+  Requires the `destatis` CLI (npm package
+  @maschinenlesbar.org/destatis-genesis-cli) on PATH, installed by the user; the
+  skill never installs it. Network access to genesis.destatis.de. Needs a
+  registered GENESIS account: --token or DESTATIS_API_TOKEN, or
+  --username/--password or DESTATIS_USERNAME/DESTATIS_PASSWORD.
 ---
 
 # DESTATIS Table Download
