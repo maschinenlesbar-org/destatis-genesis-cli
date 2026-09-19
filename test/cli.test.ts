@@ -299,3 +299,42 @@ test("a --base-url with embedded userinfo is rejected at parse time (GEN-05/GEN-
   assert.equal(cli.mt.calls.length, 0);
   assert.match(cli.err.join("\n"), /Must not embed credentials/);
 });
+
+// A blank value ("" or whitespace, often an unset shell variable) for a filter,
+// selection, code or year is never meaningful: it must be a usage error at parse
+// time rather than an empty POST parameter (`area=`) that runs the command anyway.
+const BLANK_CASES: { label: string; argv: string[] }[] = [
+  { label: "catalogue tables <selection>", argv: ["catalogue", "tables", ""] },
+  { label: "catalogue tables <selection> (whitespace)", argv: ["catalogue", "tables", "   "] },
+  { label: "catalogue values <selection>", argv: ["catalogue", "values", ""] },
+  { label: "catalogue tables --area", argv: ["catalogue", "tables", "124*", "--area", ""] },
+  { label: "catalogue statistics --type", argv: ["catalogue", "statistics", "124*", "--type", ""] },
+  { label: "metadata table --area", argv: ["metadata", "table", "12411-0001", "--area", ""] },
+  { label: "data table --area", argv: ["data", "table", "12411-0001", "--area", ""] },
+  { label: "data table --start-year", argv: ["data", "table", "12411-0001", "--start-year", ""] },
+  { label: "data table --end-year", argv: ["data", "table", "12411-0001", "--end-year", ""] },
+  { label: "data cube --region-var", argv: ["data", "cube", "12411BJ001", "--region-var", ""] },
+  { label: "data cube --region-key", argv: ["data", "cube", "12411BJ001", "--region-key", ""] },
+  { label: "data table --contents", argv: ["data", "table", "12411-0001", "--contents", ""] },
+  { label: "data table --stand", argv: ["data", "table", "12411-0001", "--stand", ""] },
+  { label: "data tablefile --class-var1", argv: ["data", "tablefile", "12411-0001", "--class-var1", ""] },
+  { label: "data tablefile --class-key1", argv: ["data", "tablefile", "12411-0001", "--class-key1", ""] },
+  { label: "data table --class-var2", argv: ["data", "table", "12411-0001", "--class-var2", ""] },
+  { label: "data table --class-key2", argv: ["data", "table", "12411-0001", "--class-key2", ""] },
+  { label: "data timeseries --class-var3", argv: ["data", "timeseries", "12411JJ001", "--class-var3", ""] },
+  { label: "data timeseries --class-key3", argv: ["data", "timeseries", "12411JJ001", "--class-key3", ""] },
+  { label: "data result --class-var4", argv: ["data", "result", "RESULT1", "--class-var4", ""] },
+  { label: "data result --class-key4", argv: ["data", "result", "RESULT1", "--class-key4", ""] },
+  { label: "data cubefile --class-var5", argv: ["data", "cubefile", "12411BJ001", "--class-var5", ""] },
+  { label: "data cubefile --class-key5 (whitespace)", argv: ["data", "cubefile", "12411BJ001", "--class-key5", "  "] },
+];
+
+for (const { label, argv } of BLANK_CASES) {
+  test(`a blank value is rejected before any request: ${label}`, async () => {
+    const cli = makeCli(() => jsonResponse(fx.tablesList));
+    const code = await run([...TOKEN, ...argv], cli.deps);
+    assert.notEqual(code, 0);
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /non-empty/);
+  });
+}
