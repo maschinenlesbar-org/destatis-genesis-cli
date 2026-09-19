@@ -1,6 +1,6 @@
 {
   "name": "destatis-genesis",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "German official-statistics skills powered by the destatis-genesis-cli (DESTATIS GENESIS-Online API).",
   "author": {
     "name": "Sebastian Schürmann",
