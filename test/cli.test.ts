@@ -4,7 +4,7 @@ import { run } from "../src/cli/run.js";
 import { DestatisClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, jsonResponse, bodyOf } from "./helpers.js";
+import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 function makeCli(
@@ -358,6 +358,22 @@ test("DEL and C1 control characters in server data are escaped in the JSON outpu
     assert.match(text, /destatis\\u007f\\u0085\\u009b2J/);
     assert.deepEqual(JSON.parse(text), served);
   }
+});
+
+test("a deeply nested response fails pretty-printing cleanly and still prints with --compact", async () => {
+  const depth = 200_000;
+  const deep = () => rawResponse("[".repeat(depth) + "]".repeat(depth), "application/json");
+  const pretty = makeCli(deep);
+  assert.equal(await run(["find", "x"], pretty.deps), 1);
+  assert.deepEqual(pretty.out, []);
+  assert.equal(pretty.err.join("\n"), "Error: The response is nested too deeply to pretty-print; try --compact.");
+
+  // Compact serialisation goes much deeper (it prints this one on current Node);
+  // should a runtime's stack still be too small, it must fail just as cleanly.
+  const compact = makeCli(deep);
+  const code = await run(["--compact", "find", "x"], compact.deps);
+  if (code === 0) assert.equal(compact.out.join("").length, 2 * depth);
+  else assert.equal(compact.err.join("\n"), "Error: The response is nested too deeply to print.");
 });
 
 test("--compact prints single-line JSON", async () => {
