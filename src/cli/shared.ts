@@ -208,19 +208,24 @@ export function toClientOptions(global: GlobalOptions, creds: ResolvedCredential
 /**
  * Write bytes to the --output file, guarding against an accidental overwrite and
  * wrapping raw filesystem errors in a typed usage error. Refuses to clobber an
- * existing file unless --force is set (fail-secure: no silent data loss), and
+ * existing file — or to write through a symlink, dangling or not — unless --force
+ * is set (fail-secure: no silent data loss), and
  * turns an ENOENT/EISDIR/EACCES from writeFile into a clean DestatisUsageError
  * instead of an untyped "Unexpected error: ENOENT: …".
  */
 function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, data: Buffer): void {
-  if (!global.force && deps.io.fileExists(path)) {
-    throw new DestatisUsageError(
+  const refuse = () =>
+    new DestatisUsageError(
       `Refusing to overwrite existing file "${path}". Pass --force to overwrite, or choose a different --output path.`,
     );
-  }
+  const force = global.force === true;
+  if (!force && deps.io.fileExists(path)) throw refuse();
   try {
-    deps.io.writeFile(path, data);
+    // Without --force the write is an exclusive create, so a symlink (even a
+    // dangling one) or a file that appeared since the check is refused too.
+    deps.io.writeFile(path, data, force);
   } catch (err) {
+    if (!force && (err as NodeJS.ErrnoException | undefined)?.code === "EEXIST") throw refuse();
     const reason = err instanceof Error ? err.message : String(err);
     throw new DestatisUsageError(`Could not write to "${path}": ${reason}`);
   }

@@ -397,6 +397,29 @@ test("a filesystem write error surfaces as a typed usage error, not Unexpected (
   assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
 });
 
+test("a file that appears between the check and the write (EEXIST) is refused like an existing one", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  let overwriteFlag: boolean | undefined;
+  cli.deps.io.writeFile = (_p, _d, overwrite) => {
+    overwriteFlag = overwrite;
+    throw Object.assign(new Error("EEXIST: file already exists"), { code: "EEXIST" });
+  };
+  const code = await run([...TOKEN, "-o", "race.json", "catalogue", "tables"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(overwriteFlag, false);
+  assert.match(cli.err.join("\n"), /Refusing to overwrite existing file "race.json"/);
+});
+
+test("--force writes with overwrite allowed", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  let overwriteFlag: boolean | undefined;
+  cli.deps.io.writeFile = (_p, _d, overwrite) => {
+    overwriteFlag = overwrite;
+  };
+  assert.equal(await run([...TOKEN, "--force", "-o", "x.json", "catalogue", "tables"], cli.deps), 0);
+  assert.equal(overwriteFlag, true);
+});
+
 test("an empty --output is rejected instead of silently writing to stdout", async () => {
   const cli = makeCli(() => jsonResponse(fx.whoami));
   const code = await run(["hello", "--output", ""], cli.deps);
