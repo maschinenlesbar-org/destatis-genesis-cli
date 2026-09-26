@@ -96,6 +96,9 @@ Match: table 12411-0001 — "Bevölkerung: Deutschland, Stichtag"
   not a failure. Broaden the term or category.
 - **`find` arrays can be `null`.** Don't assume every array is present; read the
   one for your `--category`.
+- **A wrong code is not an error.** `metadata` on a code that does not exist
+  exits `0` with `Status.Code 104` and no `Object` — check `Status.Code` before
+  handing a code off.
 - **Codes are exact.** `metadata`/`data` take a precise `name` (e.g.
   `12411-0001`), not a wildcard. Use `catalogue ... "124*"` to discover, then a
   full code to fetch.

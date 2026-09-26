@@ -87,14 +87,20 @@ Source: Statistisches Bundesamt (Destatis), Genesis-Online; DL-DE-BY-2.0.
 
 - **HTTP 200 is not success.** The CLI already maps the logical `Status` for you:
   a real failure is a non-zero exit with a clear message. But if you inspect raw
-  JSON, check `Status.Code` (`0`/`22` ok, `90` not found, `98` too large).
+  JSON, check `Status.Code` (`0`/`22` ok, `104` nothing matched, `90` not found,
+  `98` too large).
 - **Too large (`Status.Code 98`, exit 1).** The table is too big for a direct
   fetch and this CLI does not run the async batch-job flow. **Narrow** with
   `--start-year`/`--end-year`/`--timeslices`/`--class-key`, or download a subset
   (hand off to **destatis-table-download**). Do not retry unchanged.
-- **Not found is exit 4.** A wrong code → `Status.Code 90`. Re-resolve with the
-  finder skill.
+- **A wrong code exits 0, not 4.** `data`/`metadata` with a code that does not
+  exist returns `Status.Code 104` ("Es gibt keine Objekte zum angegebenen
+  Selektionskriterium") and exit `0` — the live API does this, not `Status.Code 90`
+  (exit `4` is a rare defensive path). So always read `Status.Code` in the reply.
 - **German number format** — always convert decimal-comma before math, and never
   silently drop value-status symbols.
-- **Empty (`Status.Code 104`, exit 0)** means your filters excluded everything —
-  loosen `--class-key`/year filters.
+- **Empty (`Status.Code 104`, exit 0)** means either the code does not exist or
+  your filters excluded everything. Check the code first: re-run
+  `destatis metadata table <code>` without filters — if that is `104` too, the code
+  is wrong, so re-resolve it with **destatis-statistics-finder**. Only when the
+  metadata call succeeds, loosen the `--class-key1..5`/year filters.
