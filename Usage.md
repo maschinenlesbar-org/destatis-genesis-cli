@@ -21,7 +21,7 @@ Global options (valid on any command):
 |---|---|
 | `--token <t>` | API token (env `DESTATIS_API_TOKEN`) |
 | `--username <u>` · `--password <p>` | account login (env `DESTATIS_USERNAME` / `DESTATIS_PASSWORD`) |
-| `--base-url <url>` | API base (default `https://genesis.destatis.de`) |
+| `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo or surrounding whitespace |
 | `--language <de\|en>` | response language (default `de`; English data labels are partial) |
 | `--pagelength <n>` | max list results, `1..25000` (server default 100) |
 | `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`) |

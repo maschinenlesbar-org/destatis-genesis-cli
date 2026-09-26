@@ -434,6 +434,15 @@ test("a non-http(s) base URL is rejected at construction, before any request", (
   }
 });
 
+test("a base URL with a query or fragment is rejected at construction", () => {
+  for (const baseUrl of ["https://example.test/?x=1", "https://example.test/#f"]) {
+    assert.throws(
+      () => new RequestEngine({ baseUrl }),
+      (err) => err instanceof DestatisNetworkError && /must not contain a query or fragment/.test(err.message),
+    );
+  }
+});
+
 test("an unparseable base URL is rejected at construction", () => {
   const mt = makeMockTransport(() => jsonResponse(fx.whoami));
   assert.throws(
