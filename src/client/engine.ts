@@ -10,9 +10,9 @@
 // style is no longer honoured by the server (it 302-redirects to an announcement
 // page). Only `helloworld/whoami` is an unauthenticated GET.
 
-import { nodeHttpTransport, type Transport } from "./http.js";
+import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { DestatisApiError, DestatisNetworkError, DestatisParseError } from "./errors.js";
+import { DestatisApiError, DestatisError, DestatisNetworkError, DestatisParseError } from "./errors.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
@@ -33,6 +33,11 @@ export interface RawResponse {
   status: number;
 }
 
+/**
+ * Options for {@link RequestEngine} and the client. The numeric options must be
+ * integers within their documented range; anything else (negative, fractional,
+ * NaN, Infinity, too large) makes the constructor throw a DestatisError.
+ */
 export interface EngineOptions {
   /** Base URL of the API. Defaults to https://genesis.destatis.de */
   baseUrl?: string;
@@ -44,20 +49,25 @@ export interface EngineOptions {
   defaultHeaders?: Record<string, string>;
   /**
    * Time limit per request in milliseconds, covering the whole response body, not
-   * only idle gaps (0 disables; capped at MAX_TIMEOUT_MS, 2^31 - 1 ms).
+   * only idle gaps (0 disables; at most MAX_TIMEOUT_MS, 2^31 - 1 ms).
    */
   timeoutMs?: number;
   /**
-   * Number of automatic retries for transient (429/503) responses. Each waits the
+   * Number of automatic retries for transient (429/503) responses, 0..`MAX_RETRIES`
+   * (10). Each waits the
    * response's `Retry-After` (up to `MAX_RETRY_AFTER_MS`; a longer one is not
    * retried), or else `retryDelayMs * attempt`.
    */
   maxRetries?: number;
-  /** Base backoff between retries in milliseconds (grows linearly); used without a Retry-After. */
+  /**
+   * Base backoff between retries in milliseconds (grows linearly); used without a
+   * Retry-After. At most `MAX_RETRY_AFTER_MS`.
+   */
   retryDelayMs?: number;
   /**
    * Hard cap on response body size in bytes (defends against memory exhaustion
-   * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit.
+   * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit;
+   * at most `Number.MAX_SAFE_INTEGER`.
    */
   maxResponseBytes?: number;
   /** Injectable sleep, primarily for deterministic tests. */
@@ -125,6 +135,24 @@ function assertHttpScheme(baseUrl: string): void {
   if (/[?#]/.test(baseUrl)) {
     throw new DestatisNetworkError(`Base URL must not contain a query or fragment: ${redactUrl(baseUrl)}`);
   }
+}
+
+/** Most automatic retries a caller may ask for (the CLI's --max-retries shares it). */
+export const MAX_RETRIES = 10;
+
+/**
+ * Read a numeric engine option: `undefined` gives the default; anything but an
+ * integer in [0, max] throws. Without this a negative or NaN `timeoutMs` silently
+ * disabled the timeout, and `maxResponseBytes: -1` the size cap.
+ */
+function intOption(name: string, value: number | undefined, fallback: number, max: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isSafeInteger(value) || value < 0 || value > max) {
+    throw new DestatisError(
+      `Invalid option ${name}: expected an integer from 0 to ${max}, got ${String(value)}.`,
+    );
+  }
+  return value;
 }
 
 const realSleep = (ms: number): Promise<void> =>
@@ -276,10 +304,15 @@ export class RequestEngine {
     this.transport = options.transport ?? nodeHttpTransport;
     this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
     this.defaultHeaders = options.defaultHeaders ?? {};
-    this.timeoutMs = options.timeoutMs ?? 30_000;
-    this.maxRetries = options.maxRetries ?? 2;
-    this.retryDelayMs = options.retryDelayMs ?? 200;
-    this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
+    this.timeoutMs = intOption("timeoutMs", options.timeoutMs, 30_000, MAX_TIMEOUT_MS);
+    this.maxRetries = intOption("maxRetries", options.maxRetries, 2, MAX_RETRIES);
+    this.retryDelayMs = intOption("retryDelayMs", options.retryDelayMs, 200, MAX_RETRY_AFTER_MS);
+    this.maxResponseBytes = intOption(
+      "maxResponseBytes",
+      options.maxResponseBytes,
+      DEFAULT_MAX_RESPONSE_BYTES,
+      Number.MAX_SAFE_INTEGER,
+    );
     this.sleep = options.sleep ?? realSleep;
   }
 

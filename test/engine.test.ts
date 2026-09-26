@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter, redactUrl } from "../src/client/engine.js";
-import { DestatisApiError, DestatisNetworkError, DestatisParseError } from "../src/client/errors.js";
+import { DestatisApiError, DestatisError, DestatisNetworkError, DestatisParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -421,6 +421,32 @@ test("a base URL with embedded userinfo does not leak into the error message", a
     () => e.postJson("/find/find", {}, { username: "TOK" }),
     (err) => err instanceof DestatisApiError && !/SECRETUSER|HUNTER2/.test(err.message),
   );
+});
+
+test("numeric engine options must be integers in range (a negative timeoutMs no longer disables the timeout)", () => {
+  const bad: Array<[string, Record<string, number>]> = [
+    ["timeoutMs", { timeoutMs: -1 }],
+    ["timeoutMs", { timeoutMs: Number.NaN }],
+    ["timeoutMs", { timeoutMs: 1.5 }],
+    ["timeoutMs", { timeoutMs: 2_147_483_648 }],
+    ["maxRetries", { maxRetries: 11 }],
+    ["maxRetries", { maxRetries: Number.POSITIVE_INFINITY }],
+    ["retryDelayMs", { retryDelayMs: -5 }],
+    ["retryDelayMs", { retryDelayMs: 30_001 }],
+    ["maxResponseBytes", { maxResponseBytes: -1 }],
+  ];
+  for (const [name, opts] of bad) {
+    assert.throws(
+      () => new RequestEngine(opts),
+      (err) =>
+        err instanceof DestatisError &&
+        err.message.startsWith(`Invalid option ${name}: expected an integer from 0 to `),
+      JSON.stringify(opts),
+    );
+  }
+  for (const opts of [{ timeoutMs: 0 }, { timeoutMs: 2_147_483_647 }, { maxRetries: 10 }, { maxResponseBytes: 0 }]) {
+    assert.doesNotThrow(() => new RequestEngine(opts));
+  }
 });
 
 test("a non-http(s) base URL is rejected at construction, before any request", () => {
