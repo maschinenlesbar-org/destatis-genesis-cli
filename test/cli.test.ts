@@ -275,6 +275,25 @@ test("the live 404 + flat Code 2 reply (wrong credentials) exits 1, not 4, with 
   assert.match(errText, /Hint: check your credentials/);
 });
 
+test("hello (no credentials sent) gets no credentials hint on a 401/403", async () => {
+  for (const status of [401, 403]) {
+    const cli = makeCli(() => rawResponse("", "text/html", status));
+    const code = await run(["hello"], cli.deps);
+    assert.equal(code, 1);
+    assert.match(cli.err.join("\n"), new RegExp(`HTTP ${status} for GET`));
+    assert.doesNotMatch(cli.err.join("\n"), /Hint/);
+  }
+});
+
+test("a guest find refused with 401 + Code 15 hints that credentials are needed", async () => {
+  const cli = makeCli(() => jsonResponse(fx.flatNotAuthorized, 401));
+  const code = await run(["find", "x"], cli.deps);
+  assert.equal(code, 1);
+  const errText = cli.err.join("\n");
+  assert.match(errText, /Hint: GENESIS refused the request without credentials\. Set --token/);
+  assert.doesNotMatch(errText, /check your credentials/);
+});
+
 test("a bare HTTP 404 still exits 4", async () => {
   const cli = makeCli(() => jsonResponse({ detail: "nope" }, 404));
   const code = await run([...TOKEN, "metadata", "table", "12411-0001"], cli.deps);

@@ -50,8 +50,16 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       // GENESIS signals a credential failure as HTTP 401/403 and/or a logical
       // code in a flat JSON body (15 = not authorized, 2 on a 404 = wrong
       // credentials; the engine extracts the code either way); hint at the fix.
-      if (err.isAuthError) {
+      // The hint depends on what was sent: no hint at all for an endpoint that
+      // takes no credentials (`hello` — a 401/403 there is a wrong --base-url or a
+      // proxy, not a login problem).
+      if (err.isAuthError && err.credentialsSent === true) {
         deps.io.err("Hint: check your credentials (--token or --username/--password).");
+      } else if (err.isAuthError && err.credentialsSent === false) {
+        deps.io.err(
+          "Hint: GENESIS refused the request without credentials. Set --token (env DESTATIS_API_TOKEN) " +
+            "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD).",
+        );
       }
       // Map "object not found" (logical 90 / a bare HTTP 404) to a distinct exit
       // code. A 404 carrying a GENESIS code (wrong credentials) is not a miss.

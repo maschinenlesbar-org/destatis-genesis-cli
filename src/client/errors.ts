@@ -36,6 +36,13 @@ export class DestatisApiError extends DestatisError {
   readonly method: string;
   readonly body: string;
   readonly detail: string | undefined;
+  /**
+   * Whether the failed request carried credentials: `true` if it did, `false` for
+   * an endpoint that accepts them but was called without (e.g. a guest `find`),
+   * `undefined` for an endpoint that takes none (`whoami`). Lets the CLI give the
+   * right hint — or none — for an auth error.
+   */
+  readonly credentialsSent: boolean | undefined;
 
   constructor(args: {
     url: string;
@@ -45,6 +52,7 @@ export class DestatisApiError extends DestatisError {
     code?: number;
     statusType?: string;
     detail?: string;
+    credentialsSent?: boolean;
   }) {
     const detailPart = args.detail ? `: ${args.detail}` : "";
     const typePart = args.statusType ? ` (${args.statusType})` : "";
@@ -67,6 +75,7 @@ export class DestatisApiError extends DestatisError {
     this.method = args.method;
     this.body = args.body;
     this.detail = args.detail;
+    this.credentialsSent = args.credentialsSent;
   }
 
   /**
