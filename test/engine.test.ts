@@ -182,6 +182,25 @@ test("explains Status.Code 98 (too large) with narrowing guidance", async () => 
   );
 });
 
+test("the Status.Code 98 hint names real flags for the endpoint", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.tooLarge));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/genesisWS/rest/2020/data/table", {}, {}),
+    (err) =>
+      err instanceof DestatisApiError &&
+      /--class-key1\.\.5/.test(err.message) &&
+      !/--class-key\)/.test(err.message),
+  );
+  await assert.rejects(
+    () => e.postJson("/genesisWS/rest/2020/catalogue/tables", {}, {}),
+    (err) =>
+      err instanceof DestatisApiError &&
+      /narrow the selection or search term, or lower --pagelength/.test(err.message) &&
+      !/--start-year|--class-key/.test(err.message),
+  );
+});
+
 test("treats Status.Code 104 as a valid empty result (no throw)", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.emptyResult));
   const e = new RequestEngine({ transport: mt.transport });

@@ -74,7 +74,7 @@ destatis --compact metadata table 12411-0001
 `metadata <kind> <name>` (`kind` ∈ table/statistic/cube/timeseries/variable/value)
 returns an `Object` describing the object's dimensions (`variable`s) and value
 ranges — so you can tell the user *what breakdowns and years* the table offers
-and which `--class-var`/`--class-key` filters exist.
+and which `--class-var1..5`/`--class-key1..5` filters exist.
 
 ## Step 4 — Report
 

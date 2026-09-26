@@ -194,6 +194,19 @@ export function redactUrl(rawUrl: string): string {
   }
 }
 
+/**
+ * Guidance for a "too large" (98) reply, phrased for the endpoint: only the
+ * `data/*` endpoints have year/time-slice/classifying filters (the CLI's
+ * `--class-key1..5` etc.); catalogue and find are narrowed by their selection or
+ * term and `--pagelength`.
+ */
+function tooLargeHint(url: string): string {
+  const base = "this read-only CLI does not run the async batch-job flow; ";
+  return /\/data\/[^/?#]+$/.test(url)
+    ? `${base}narrow the selection (--start-year/--end-year/--timeslices/--region-key/--class-key1..5) or download a smaller subset`
+    : `${base}narrow the selection or search term, or lower --pagelength`;
+}
+
 /** The `{ Code, Content, Type }` status object of a GENESIS reply. */
 interface GenesisStatus {
   Code?: unknown;
@@ -458,10 +471,7 @@ export class RequestEngine {
     if (!isErrorType && (code === undefined || code === CODE_EMPTY)) return;
 
     if (code === CODE_NOT_FOUND || code === CODE_TOO_LARGE || isErrorType) {
-      const detail =
-        code === CODE_TOO_LARGE
-          ? `${content ?? "result too large"} — this read-only CLI does not run the async batch-job flow; narrow the selection (--start-year/--end-year/--timeslices/--class-key) or download a smaller subset`
-          : content;
+      const detail = code === CODE_TOO_LARGE ? `${content ?? "result too large"} — ${tooLargeHint(url)}` : content;
       throw new DestatisApiError({
         method,
         url: redactUrl(url),

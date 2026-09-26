@@ -156,8 +156,9 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 
 - **Too-large tables.** A table that is too big to return synchronously fails
   with `Status.Code 98`; this read-only CLI does not run the async batch-job
-  flow. Narrow the request (`--start-year`/`--end-year`/`--timeslices`/`--class-key`)
-  or download a subset via `data tablefile`.
+  flow. Narrow the request (`--start-year`/`--end-year`/`--timeslices`/`--region-key`/`--class-key1..5`)
+  or download a subset via `data tablefile`. On `catalogue`/`find`, narrow the
+  selection or search term, or lower `--pagelength`.
 - **Pagination.** GENESIS paginates by `--pagelength` only (no offset/cursor);
   narrow with `selection`/`term` rather than paging.
 - **Transient upstream errors.** The GENESIS server is occasionally flaky: an

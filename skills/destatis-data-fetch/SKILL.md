@@ -91,7 +91,7 @@ Source: Statistisches Bundesamt (Destatis), Genesis-Online; DL-DE-BY-2.0.
   `98` too large).
 - **Too large (`Status.Code 98`, exit 1).** The table is too big for a direct
   fetch and this CLI does not run the async batch-job flow. **Narrow** with
-  `--start-year`/`--end-year`/`--timeslices`/`--class-key`, or download a subset
+  `--start-year`/`--end-year`/`--timeslices`/`--class-key1..5`, or download a subset
   (hand off to **destatis-table-download**). Do not retry unchanged.
 - **A wrong code exits 0, not 4.** `data`/`metadata` with a code that does not
   exist returns `Status.Code 104` ("Es gibt keine Objekte zum angegebenen
