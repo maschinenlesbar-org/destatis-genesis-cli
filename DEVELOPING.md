@@ -61,8 +61,10 @@ Only `helloworld/whoami` is an unauthenticated **`GET`**. The client
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; validated in
-`shared.ts:resolveCredentials`). A token wins over username/password; supplying
-only one of username/password is a `DestatisUsageError` (exit 2).
+`shared.ts:resolveCredentials`). A token wins over username/password, except that
+a `--username`/`--password` *flag* beats an env-only token (commander's value
+source tells flag from env); supplying only one of username/password is a
+`DestatisUsageError` (exit 2).
 
 Two things the transport MUST get right (both found by live testing):
 

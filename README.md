@@ -31,7 +31,9 @@ credential is bundled with this tool.
 | Username + password | `--username <u>` / `--password <p>` | `DESTATIS_USERNAME` / `DESTATIS_PASSWORD` |
 
 Precedence per field is **flag > env var > unset**; a token takes precedence over
-username/password. Only `destatis hello` works without credentials.
+username/password — except that a `--username`/`--password` **flag** beats a token
+from `DESTATIS_API_TOKEN`, so the account you name on the command line is the one
+used. Only `destatis hello` works without credentials.
 
 > **Prefer the environment variables.** A credential passed as a `--token` /
 > `--username` / `--password` **flag** is visible in the process table (`ps`,
