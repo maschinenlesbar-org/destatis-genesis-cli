@@ -68,9 +68,9 @@ scramble the terminal.
 
 The CLI prints a stderr confirmation like
 `Wrote 40213 bytes to population.zip (Content-Type: application/zip)`. Relay that
-to the user: the **path**, the **byte count**, and the **format**. If the byte
-count is suspiciously small (a few hundred bytes), the "download" may actually be
-a JSON error the CLI surfaced — check the exit code and re-read the message.
+to the user: the **path**, the **byte count**, and the **format**. Report success
+only on exit `0`: when GENESIS sends a status reply instead of the file, the CLI
+writes nothing, prints the `GENESIS status …` message and exits non-zero.
 
 ```
 Wrote population.zip — 40,213 bytes, ffcsv (zipped).
@@ -85,8 +85,9 @@ Unzip with: unzip population.zip
 - **Never omit `-o`** for a download — binary to a terminal is a mess.
 - **Too large (`Status.Code 98`, exit 1)** still applies to `*file` on very large
   tables — narrow the selection; the async job flow is not supported.
-- **Not found is exit 4** (`Status.Code 90`) — re-check the code.
+- **Not found is exit 4.** A code that does not exist comes back as
+  `GENESIS status 104 … the server sent this status instead of a file` (rarely
+  `Status.Code 90`) and nothing is written — re-resolve the code with
+  **destatis-statistics-finder**.
 - **Confirm the path and don't silently overwrite** — this skill writes to the
   user's filesystem; the CLI refuses existing targets without `--force`.
-- A tiny output file usually means an error envelope was returned instead of the
-  ZIP — verify before telling the user it succeeded.

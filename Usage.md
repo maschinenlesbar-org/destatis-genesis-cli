@@ -117,6 +117,11 @@ server returns a **ZIP** wrapper; the bytes are written as-is to `-o <file>` (or
 stdout). `ffcsv` is a tidy/flat CSV with English headers; `datencsv` is the
 default.
 
+A JSON or empty reply is never written as a download: it is a GENESIS status the
+server sent instead of the file. The CLI then writes nothing and exits non-zero —
+**4** for `Status.Code 104` (no object with that code) or `90`, **1** for anything
+else (credentials, `98` too large, an empty body).
+
 ```bash
 destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 ```
@@ -128,12 +133,14 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 | `0` | success (help/version included); also an **empty result** — see note |
 | `1` | API/logical error (including wrong or missing credentials), network or parse error |
 | `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command) |
-| `4` | object not found — only the rare `Status.Code 90` / a bare HTTP 404 (see note) |
+| `4` | object not found — the rare `Status.Code 90` / a bare HTTP 404 (see note), and a `data <kind>file` download for a code that does not exist (`Status.Code 104`) |
 
 > **A missing object code does not exit 4.** Looking up a code that does not exist
 > on `metadata`/`data` returns `Status.Code 104` ("Es gibt keine Objekte zum
 > angegebenen Selektionskriterium") — a valid **empty** result, so the CLI exits
-> **0**, the same as an empty `catalogue`/`find` search. The `90 → 4` mapping is a
+> **0**, the same as an empty `catalogue`/`find` search. (A `data <kind>file`
+> download is the exception: there `104` means there is nothing to download, so it
+> exits **4** and writes no file.) The `90 → 4` mapping is a
 > defensive path the server rarely takes. To detect "no such object" in a script,
 > inspect `Status.Code` in the payload, not the exit code.
 

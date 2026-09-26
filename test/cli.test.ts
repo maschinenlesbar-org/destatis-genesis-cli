@@ -200,6 +200,23 @@ test("a bare HTTP 404 still exits 4", async () => {
   assert.doesNotMatch(cli.err.join("\n"), /Hint/);
 });
 
+test("data tablefile with a Status.Code 104 reply (unknown code) exits 4 and writes no file", async () => {
+  const cli = makeCli(() => jsonResponse(fx.emptyResult));
+  const code = await run([...TOKEN, "data", "tablefile", "99999-9999", "--format", "xlsx", "-o", "t.xlsx"], cli.deps);
+  assert.equal(code, 4);
+  assert.equal(cli.files.size, 0);
+  assert.match(cli.err.join("\n"), /GENESIS status 104/);
+  assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
+});
+
+test("data tablefile with an empty body exits 1 and writes no file", async () => {
+  const cli = makeCli(() => ({ status: 200, headers: { "content-type": "application/zip" }, body: Buffer.alloc(0) }));
+  const code = await run([...TOKEN, "data", "tablefile", "12411-0001", "-o", "t.zip"], cli.deps);
+  assert.equal(code, 1);
+  assert.equal(cli.files.size, 0);
+  assert.match(cli.err.join("\n"), /Empty response body/);
+});
+
 test("--output writes JSON to a file and keeps stdout clean", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   const code = await run([...TOKEN, "--output", "/tmp/out.json", "catalogue", "tables"], cli.deps);

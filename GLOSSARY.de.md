@@ -55,7 +55,7 @@ Ausnahme sind Authentifizierungsfehler: Sie kommen als flacher Body `{ Code, Con
 | `0` | Information | Erfolg | liefert Daten |
 | `22` | Warnung | Erfolg, ein Parameter wurde automatisch korrigiert | liefert Daten (Warnung in `Status.Content` sichtbar) |
 | `50` | Information | keine neueren Daten (bei `--stand`) | liefert Daten |
-| `104` | Information | kein Objekt gefunden, das passt | liefert ein **leeres** Ergebnis (Exit 0) |
+| `104` | Information | kein Objekt gefunden, das passt | liefert ein **leeres** Ergebnis (Exit 0); ein Download mit `data <kind>file` schlägt stattdessen fehl (Exit 4, keine Datei geschrieben) |
 | `90` | Fehler | angefordertes Objekt nicht gefunden | Fehler, **Exit 4** |
 | `98` | Information | Ergebnis zu groß für einen direkten Abruf | Fehler mit Hinweisen zum Eingrenzen, Exit 1 |
 | `15` | ERROR | nicht berechtigt: Zugangsdaten fehlen oder werden nicht erkannt (flacher Body bei HTTP 401) | Fehler `GENESIS status 15 (ERROR) / HTTP 401` mit dem GENESIS-Text und einem Hinweis auf die Zugangsdaten, Exit 1 |

@@ -270,9 +270,19 @@ export class RequestEngine {
 
   /**
    * POST form-encoded params and return the raw bytes (file / binary downloads).
-   * If the server answered with JSON instead of the expected binary (e.g. a
-   * credential or "too large" error on a `data/*file` endpoint), the logical
-   * `Status` is checked so the failure surfaces cleanly.
+   *
+   * A `data/*file` endpoint answers with a file (a ZIP wrapper), so a JSON or
+   * empty reply is never a download: it is a GENESIS status the server sent
+   * instead of the file (a credential, "too large" or "no such object" reply),
+   * and handing it back would let a caller save `{"Status":…}` as `x.xlsx`.
+   *  - an empty body → `DestatisParseError`;
+   *  - a JSON body with a GENESIS status (enveloped or flat) → the logical-error
+   *    mapping (90, 98, error `Type`), and otherwise a `DestatisApiError` with
+   *    that status — including `104` ("keine Objekte"), which for a download
+   *    means "no such object" (`isNotFound`, exit 4 in the CLI);
+   *  - any other JSON, or a body labelled JSON that does not parse →
+   *    `DestatisParseError`.
+   * A body counts as JSON when its Content-Type says so or it starts with `{`.
    */
   async postRaw(
     path: string,
@@ -281,17 +291,42 @@ export class RequestEngine {
     authHeaders: Record<string, string>,
   ): Promise<RawResponse> {
     const res = await this.request("POST", path, { params, accept, authHeaders });
-    if (/json/i.test(res.contentType)) {
-      const text = res.data.toString("utf8");
-      try {
-        const parsed = JSON.parse(text) as unknown;
-        this.checkLogicalStatus("POST", this.buildUrl(path), text, parsed);
-      } catch (err) {
-        if (err instanceof DestatisApiError) throw err;
-        // Not parseable / not an envelope — fall through and return the bytes.
-      }
+    if (res.data.length === 0) {
+      throw new DestatisParseError(`Empty response body from ${path}: expected a file download.`);
     }
-    return res;
+    const jsonType = /json/i.test(res.contentType);
+    const text = res.data.toString("utf8");
+    if (!jsonType && !text.trimStart().startsWith("{")) return res;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch (cause) {
+      if (!jsonType) return res; // starts with "{" but is not JSON: a real file
+      throw new DestatisParseError(
+        `Expected a file download from ${path}, got an unparseable reply labelled ${res.contentType}.`,
+        { cause },
+      );
+    }
+    const url = this.buildUrl(path);
+    this.checkLogicalStatus("POST", url, text, parsed);
+    const s = genesisStatus(parsed);
+    if (s === undefined) {
+      throw new DestatisParseError(
+        `Expected a file download from ${path}, got a JSON reply without a GENESIS status.`,
+      );
+    }
+    const code = typeof s.Code === "number" ? s.Code : undefined;
+    const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
+    const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
+    throw new DestatisApiError({
+      method: "POST",
+      url: redactUrl(url),
+      body: text,
+      ...(code !== undefined ? { code } : {}),
+      ...(type !== undefined ? { statusType: type } : {}),
+      detail: `${content ? `${content} — ` : ""}the server sent this status instead of a file`,
+    });
   }
 
   private decodeJson<T>(method: "GET" | "POST", path: string, res: RawResponse): T {

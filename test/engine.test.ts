@@ -266,6 +266,64 @@ test("postRaw surfaces a JSON logical error served on a file endpoint", async ()
   );
 });
 
+test("postRaw raises a Status.Code 104 reply on a file endpoint as not-found (no download)", async () => {
+  const mt = makeMockTransport(() => rawResponse(JSON.stringify(fx.emptyResult), "application/json;charset=UTF-8"));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postRaw("/data/tablefile", "application/zip", { name: "99999-9999" }, { username: "TOK" }),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.equal(err.code, 104);
+      assert.ok(err.isNotFound);
+      assert.match(err.message, /GENESIS status 104 \(Information\)/);
+      assert.match(err.message, /instead of a file/);
+      return true;
+    },
+  );
+});
+
+test("postRaw raises a flat auth-error body on a file endpoint", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.flatBadCredentials)); // HTTP 200
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && err.code === 2,
+  );
+});
+
+test("postRaw raises a success envelope (Code 0) on a file endpoint — JSON is never a download", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.dataTable));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && err.code === 0 && !err.isNotFound,
+  );
+});
+
+test("postRaw rejects an empty body, JSON without a status and unparseable JSON", async () => {
+  for (const [body, type] of [
+    ["", "application/json;charset=UTF-8"],
+    ["", "application/zip"],
+    ['{"hello":"world"}', "application/octet-stream"],
+    ["this is not json", "application/json;charset=UTF-8"],
+  ] as const) {
+    const mt = makeMockTransport(() => rawResponse(body, type));
+    const e = new RequestEngine({ transport: mt.transport });
+    await assert.rejects(
+      () => e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" }),
+      DestatisParseError,
+      `${type}: ${body}`,
+    );
+  }
+});
+
+test("postRaw returns a non-JSON body that merely starts with a brace", async () => {
+  const mt = makeMockTransport(() => rawResponse("{not json;1;2\n", "text/csv"));
+  const e = new RequestEngine({ transport: mt.transport });
+  const res = await e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" });
+  assert.equal(res.data.toString("utf8"), "{not json;1;2\n");
+});
+
 test("redactUrl masks username and password query parameters", () => {
   const masked = redactUrl("https://genesis.destatis.de/x?name=1&username=SECRET&password=HUNTER2");
   assert.match(masked, /username=%2A%2A%2A|username=\*\*\*/);
