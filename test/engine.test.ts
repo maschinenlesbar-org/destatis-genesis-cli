@@ -223,6 +223,25 @@ test("strips terminal control characters from a logical Status.Content (GEN-03)"
   );
 });
 
+test("CR/LF and bidi controls in Status.Content cannot overwrite or reorder the error line", async () => {
+  const CR = String.fromCharCode(0x0d);
+  const LF = String.fromCharCode(0x0a);
+  const RLO = String.fromCharCode(0x202e);
+  const mt = makeMockTransport(() =>
+    jsonResponse(fx.envelope({}, { Code: 90, Type: "Fehler", Content: `Objekt nicht gefunden${CR}OK: fetched${LF}Error: forged ${RLO}txet` })),
+  );
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/metadata/table", {}, {}),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.equal(err.detail, "Objekt nicht gefunden OK: fetched Error: forged txet");
+      assert.doesNotMatch(err.message, /[\r\n\u202e]/);
+      return true;
+    },
+  );
+});
+
 test("strips terminal control characters from the echoed Content-Type (GEN-03)", async () => {
   const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
   const mt = makeMockTransport(() => rawResponse(zip, `application/zip${ESC}[31m`));
