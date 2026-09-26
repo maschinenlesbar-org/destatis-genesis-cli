@@ -98,3 +98,12 @@ test("enforces maxResponseBytes", async () => {
     },
   );
 });
+
+test("a header value Node cannot send becomes a typed DestatisNetworkError, not a raw TypeError", async () => {
+  for (const value of ["a\r\nX-Evil: 1", "\u20ac"]) {
+    await assert.rejects(
+      () => nodeHttpTransport({ method: "GET", url: "http://127.0.0.1:9/x", headers: { password: value } }),
+      (err) => err instanceof DestatisNetworkError && /^Invalid request: /.test(err.message),
+    );
+  }
+});

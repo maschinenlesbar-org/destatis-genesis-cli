@@ -174,6 +174,32 @@ test("a control character in an env credential is rejected before any request (G
   assert.match(cli.err.join("\n"), /DESTATIS_API_TOKEN contains control characters/);
 });
 
+test("non-Latin-1 characters in --user-agent, --token or an env password are usage errors", async () => {
+  for (const [argv, env, pattern] of [
+    [["--user-agent", "ü€", "hello"], {}, /outside Latin-1/],
+    [["--token", "tok\u{1F600}", "find", "x"], {}, /outside Latin-1/],
+    [
+      ["logincheck"],
+      { DESTATIS_USERNAME: "testuser", DESTATIS_PASSWORD: "s3cr3t€pw" },
+      /Environment variable DESTATIS_PASSWORD contains characters outside Latin-1/,
+    ],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.loginOk), { ...env });
+    const code = await run([...argv], cli.deps);
+    assert.equal(code, 2, argv.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), pattern);
+    assert.doesNotMatch(cli.err.join("\n"), /Unexpected error|s3cr3t/);
+  }
+});
+
+test("a Latin-1 --user-agent (ü) is accepted and sent", async () => {
+  const cli = makeCli(() => jsonResponse(fx.whoami));
+  const code = await run(["--user-agent", "Grüße-cli", "hello"], cli.deps);
+  assert.equal(code, 0);
+  assert.equal(cli.mt.last().headers?.["User-Agent"], "Grüße-cli");
+});
+
 test("a blank <term> on find is rejected before any request", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult));
   const code = await run([...TOKEN, "find", "   "], cli.deps);
