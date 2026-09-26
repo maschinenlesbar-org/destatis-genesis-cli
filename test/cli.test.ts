@@ -376,6 +376,14 @@ test("a deeply nested response fails pretty-printing cleanly and still prints wi
   else assert.equal(compact.err.join("\n"), "Error: The response is nested too deeply to print.");
 });
 
+test("an empty 200 reply exits 1 instead of printing null", async () => {
+  const cli = makeCli(() => rawResponse("", "application/json"));
+  const code = await run(["find", "x"], cli.deps);
+  assert.equal(code, 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(cli.err.join("\n"), /Empty response body from \/genesisWS\/rest\/2020\/find\/find/);
+});
+
 test("--compact prints single-line JSON", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   await run([...TOKEN, "--compact", "catalogue", "tables"], cli.deps);
