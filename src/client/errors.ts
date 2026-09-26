@@ -47,10 +47,13 @@ export class DestatisApiError extends DestatisError {
     detail?: string;
   }) {
     const detailPart = args.detail ? `: ${args.detail}` : "";
+    const typePart = args.statusType ? ` (${args.statusType})` : "";
     const genesisPart =
       args.code !== undefined
-        ? `GENESIS status ${args.code}${args.statusType ? ` (${args.statusType})` : ""}`
-        : undefined;
+        ? `GENESIS status ${args.code}${typePart}`
+        : typePart !== ""
+          ? `GENESIS status${typePart}` // an error Type without a usable Code
+          : undefined;
     const httpPart = args.httpStatus !== undefined ? `HTTP ${args.httpStatus}` : undefined;
     const head =
       genesisPart !== undefined && httpPart !== undefined

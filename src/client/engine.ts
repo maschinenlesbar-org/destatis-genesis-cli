@@ -202,6 +202,17 @@ interface GenesisStatus {
 }
 
 /**
+ * A GENESIS status code as a number. GENESIS stringifies many fields
+ * (`"pagelength":"100"`), so a numeric string (`"90"`) counts too; anything else
+ * is undefined.
+ */
+function statusCode(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return Number(value.trim());
+  return undefined;
+}
+
+/**
  * Find the GENESIS status in a parsed body: the envelope's `Status` object, or a
  * flat top-level `{ Code, Content, Type }` (the auth-failure shape). Returns
  * undefined for anything else — including helloworld/logincheck, whose `Status`
@@ -215,7 +226,7 @@ function genesisStatus(parsed: unknown): GenesisStatus | undefined {
       ? (top.Status as GenesisStatus)
       : undefined;
   }
-  if (typeof top.Code === "number" && typeof top.Type === "string") return top;
+  if (statusCode(top.Code) !== undefined && typeof top.Type === "string") return top;
   return undefined;
 }
 
@@ -380,7 +391,7 @@ export class RequestEngine {
         `Expected a file download from ${path}, got a JSON reply without a GENESIS status.`,
       );
     }
-    const code = typeof s.Code === "number" ? s.Code : undefined;
+    const code = statusCode(s.Code);
     const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
     const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
     throw new DestatisApiError({
@@ -433,14 +444,15 @@ export class RequestEngine {
   ): void {
     const s = genesisStatus(parsed);
     if (s === undefined) return;
-    const code = typeof s.Code === "number" ? s.Code : undefined;
-    if (code === undefined || code === CODE_EMPTY) return;
-
+    const code = statusCode(s.Code);
     // Type / Content are server-controlled and reach the terminal via the error
     // message; strip any embedded terminal control characters at the source.
     const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
     const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
     const isErrorType = type !== undefined && /error|fehler/i.test(type);
+    // An error Type is an error whatever the code looks like — a missing or
+    // non-numeric Code must not turn a "Fehler" into success.
+    if (!isErrorType && (code === undefined || code === CODE_EMPTY)) return;
 
     if (code === CODE_NOT_FOUND || code === CODE_TOO_LARGE || isErrorType) {
       const detail =
@@ -483,7 +495,7 @@ export class RequestEngine {
         const parsed = JSON.parse(text) as unknown;
         const s = genesisStatus(parsed);
         if (s) {
-          if (typeof s.Code === "number") code = s.Code;
+          code = statusCode(s.Code);
           if (typeof s.Type === "string") statusType = s.Type;
           if (typeof s.Content === "string") detail = s.Content;
         } else if (parsed && typeof parsed === "object") {

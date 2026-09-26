@@ -96,7 +96,10 @@ in a `Status` object (`{ Code, Content, Type }`). After a successful parse,
 | `104` | **empty result** — returned as a valid empty list, NOT an error (except on a `data/*file` download, below) |
 | `90` | object not found → `DestatisApiError`, `isNotFound` (exit 4) |
 | `98` | too large → `DestatisApiError` with narrowing guidance (exit 1) |
-| any `Type` = `Fehler`/`Error` | → `DestatisApiError` (exit 1) |
+| any `Type` = `Fehler`/`Error` | → `DestatisApiError` (exit 1) — also when `Code` is missing or not numeric |
+
+A numeric-string `Code` (`"90"`) counts as that number (`statusCode()`), since
+GENESIS stringifies many fields.
 
 A `data/*file` endpoint answers with a file (a ZIP wrapper), so `postRaw` treats
 any JSON or empty reply as a failure rather than a download: an empty body or JSON

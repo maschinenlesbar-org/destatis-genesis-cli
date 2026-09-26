@@ -137,6 +137,30 @@ test("a flat non-error body (logincheck / whoami shape) is returned as-is", asyn
   assert.deepEqual(await e.postJson("/helloworld/logincheck", {}, {}), fx.loginOk);
 });
 
+test("a numeric-string Code or a missing Code with an error Type is still an error", async () => {
+  for (const [status, check] of [
+    [{ Code: "90", Content: "string code not found", Type: "Fehler" }, (e: DestatisApiError) => e.code === 90 && e.isNotFound],
+    [{ Code: "x", Content: "odd code", Type: "Fehler" }, (e: DestatisApiError) => e.code === undefined && /^GENESIS status \(Fehler\) for POST/.test(e.message)],
+    [{ Content: "no code", Type: "ERROR" }, (e: DestatisApiError) => e.code === undefined && /no code/.test(e.message)],
+  ] as const) {
+    const body = { Ident: {}, Status: status, Parameter: {}, Copyright: "c" };
+    const mt = makeMockTransport(() => jsonResponse(body));
+    const e = new RequestEngine({ transport: mt.transport });
+    await assert.rejects(
+      () => e.postJson("/metadata/table", {}, {}),
+      (err) => err instanceof DestatisApiError && check(err),
+      JSON.stringify(status),
+    );
+  }
+});
+
+test("a numeric-string Code 104 is still a valid empty result", async () => {
+  const body = { Ident: {}, Status: { Code: "104", Content: "keine", Type: "Information" }, List: [] };
+  const mt = makeMockTransport(() => jsonResponse(body));
+  const e = new RequestEngine({ transport: mt.transport });
+  assert.deepEqual(await e.postJson("/x", {}, {}), body);
+});
+
 test("explains Status.Code 98 (too large) with narrowing guidance", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.tooLarge));
   const e = new RequestEngine({ transport: mt.transport });
