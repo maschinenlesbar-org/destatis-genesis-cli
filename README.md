@@ -35,7 +35,9 @@ username/password — except that a `--username`/`--password` **flag** beats a t
 from `DESTATIS_API_TOKEN`, so the account you name on the command line is the one
 used. `destatis hello` and `destatis find` work without credentials (GENESIS
 serves anonymous searches as its guest user `GAST`); `catalogue`, `metadata`,
-`data` and `logincheck` need an account.
+`data` and `logincheck` need an account. Credentials are sent exactly as given: a
+blank credential flag, or one with leading or trailing whitespace (which an HTTP
+header cannot carry), is refused with exit 2; a blank env var counts as unset.
 
 > **Prefer the environment variables.** A credential passed as a `--token` /
 > `--username` / `--password` **flag** is visible in the process table (`ps`,
