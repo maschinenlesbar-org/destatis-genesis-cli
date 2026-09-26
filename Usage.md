@@ -162,7 +162,8 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
   individual `find` term or request can return a transient `HTTP 500` or time out,
   and the very same call usually succeeds moments later (the failure moves between
   terms over time — it is not tied to a specific word or to umlauts). Just retry,
-  or raise `--timeout`. Note that only `429`/`503` are auto-retried (`--max-retries`),
+  or raise `--timeout`. Note that only `429`/`503` are auto-retried (`--max-retries`,
+  each after the server's `Retry-After`, up to 30 s — a longer one is not retried),
   **not** `500` or timeouts. Where the server includes a message, the CLI now
   surfaces it in the error text.
 - **`"boolean"`/count fields are strings.** List items encode e.g. `Values` /
