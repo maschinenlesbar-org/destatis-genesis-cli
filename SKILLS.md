@@ -16,7 +16,7 @@ They compose: **finder → data-fetch** (or **→ table-download**).
 ## Requirements
 
 - The `destatis` CLI on PATH: `npm install -g @maschinenlesbar.org/destatis-genesis-cli`.
-- **Credentials** (except `destatis hello`): a free GENESIS account. Set
+- **Credentials** (except `destatis hello` and `destatis find`): a free GENESIS account. Set
   `DESTATIS_API_TOKEN`, or `DESTATIS_USERNAME` + `DESTATIS_PASSWORD`. Register at
   https://www-genesis.destatis.de. No credential is bundled.
 

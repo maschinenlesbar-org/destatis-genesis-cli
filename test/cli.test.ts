@@ -48,6 +48,17 @@ test("a credential-required command with no credentials exits 2 and issues no re
   assert.match(cli.err.join("\n"), /needs credentials/);
 });
 
+test("find works without credentials (GENESIS guest access) and sends no credential header", async () => {
+  const cli = makeCli(() => jsonResponse(fx.findResult));
+  const code = await run(["find", "Bevölkerung", "--category", "tables"], cli.deps);
+  assert.equal(code, 0);
+  const req = cli.mt.last();
+  assert.equal(new URL(req.url).pathname, "/genesisWS/rest/2020/find/find");
+  assert.equal(req.headers?.["username"], undefined);
+  assert.equal(req.headers?.["password"], undefined);
+  assert.equal(bodyOf(req).get("term"), "Bevölkerung");
+});
+
 test("only one of --username/--password exits 2 before any request", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   const code = await run(["catalogue", "tables", "--username", "USER123456"], cli.deps);

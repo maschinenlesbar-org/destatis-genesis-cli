@@ -43,7 +43,9 @@ destatis logincheck      # helloworld/logincheck — validates your credentials
 destatis find <term> [--category all|tables|statistics|cubes|variables|time-series]
 ```
 
-`--pagelength` bounds the result count. Returns parallel arrays
+Works **without credentials**: GENESIS answers an anonymous search as its guest
+user `GAST` (credentials are sent when configured). `--pagelength` bounds the
+result count. Returns parallel arrays
 (`Tables`/`Statistics`/`Cubes`/`Timeseries`/`Variables`), each `null` when not
 searched.
 

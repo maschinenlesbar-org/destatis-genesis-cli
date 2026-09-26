@@ -77,7 +77,8 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
         "(https://genesis.destatis.de) — Germany's official-statistics database. " +
         "Needs a free account: pass --token (env DESTATIS_API_TOKEN) or " +
         "--username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
-        "Register at https://www-genesis.destatis.de; `destatis hello` needs no credentials.",
+        "Register at https://www-genesis.destatis.de; `destatis hello` and `destatis find` " +
+        "work without credentials.",
     )
     .version(VERSION)
     .option("--base-url <url>", "API base URL", parseBaseUrl, "https://genesis.destatis.de")

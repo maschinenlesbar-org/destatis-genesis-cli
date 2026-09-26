@@ -57,7 +57,10 @@ authenticated call is a **`POST`** with:
   account username) and, only in username/password mode, `password`. There is
   **no** `Authorization`/`X-API-Key` header.
 
-Only `helloworld/whoami` is an unauthenticated **`GET`**. The client
+Only `helloworld/whoami` is an unauthenticated **`GET`**. `find/find` is a POST
+that GENESIS also serves without credentials, as its guest user `GAST` (checked
+live 2026-09-26; `catalogue`/`metadata`/`data` answer 401 + Code 15 then), so the
+CLI's `find` does not demand credentials (`action(..., { auth: false })`). The client
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; validated in

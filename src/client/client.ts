@@ -7,8 +7,10 @@
 // the `username` header (no password) OR a `username`+`password` pair — and the
 // request parameters in a form-urlencoded body. No credential is bundled; pass
 // them via the options below (CLI: --token / --username+--password, or the
-// DESTATIS_API_TOKEN / DESTATIS_USERNAME / DESTATIS_PASSWORD env vars). Only
-// `whoami()` works without credentials.
+// DESTATIS_API_TOKEN / DESTATIS_USERNAME / DESTATIS_PASSWORD env vars).
+// `whoami()` needs no credentials, and `find()` works without them too (GENESIS
+// answers an anonymous call as the guest user "GAST"); catalogue, metadata and
+// data need an account.
 //
 //   const c = new DestatisClient({ token: process.env.DESTATIS_API_TOKEN });
 //   await c.find({ term: "Bevölkerung" });
