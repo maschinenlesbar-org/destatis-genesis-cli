@@ -126,9 +126,9 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 | Code | Meaning |
 |---|---|
 | `0` | success (help/version included); also an **empty result** — see note |
-| `1` | API/logical error (including HTTP 401), network or parse error |
+| `1` | API/logical error (including wrong or missing credentials), network or parse error |
 | `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command) |
-| `4` | object not found — only the rare `Status.Code 90` / HTTP 404 (see note) — **and wrong credentials** (see the second note) |
+| `4` | object not found — only the rare `Status.Code 90` / a bare HTTP 404 (see note) |
 
 > **A missing object code does not exit 4.** Looking up a code that does not exist
 > on `metadata`/`data` returns `Status.Code 104` ("Es gibt keine Objekte zum
@@ -137,11 +137,11 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 > defensive path the server rarely takes. To detect "no such object" in a script,
 > inspect `Status.Code` in the payload, not the exit code.
 
-> **Wrong credentials exit 4.** GENESIS answers a wrong username/password or token
+> **Wrong credentials exit 1.** GENESIS answers a wrong username/password or token
 > with HTTP 404 and a flat `{"Code":2,"Content":"…Nutzernamen oder Ihren Token bzw.
-> das Passwort…","Type":"ERROR"}` body. The CLI maps that 404 to exit 4 and prints
-> only `Error: HTTP 404 for POST …`, without the GENESIS text or a credentials hint.
-> A bare `HTTP 404` (no `GENESIS status …`) therefore means a login problem.
+> das Passwort…","Type":"ERROR"}` body. The CLI reads that body, so the error is
+> `GENESIS status 2 (ERROR) / HTTP 404 for POST …: …Nutzernamen…`, followed by a
+> credentials hint, and exits **1**. Only a 404 without a GENESIS code exits 4.
 
 ## Gotchas
 

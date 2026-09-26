@@ -57,8 +57,8 @@ envelope) on HTTP 401 or 404:
 | `104` | Information | no object matched | returns an **empty** result (exit 0) |
 | `90` | Fehler | requested object not found | error, **exit 4** |
 | `98` | Information | result too large for a direct fetch | error with narrowing guidance, exit 1 |
-| `15` | ERROR | not authorized: credentials missing or not recognized (flat body on HTTP 401) | error `HTTP 401` plus a credentials hint, exit 1 (the GENESIS text is not shown) |
-| `2` | ERROR | wrong username/password or token (flat body on HTTP **404**) | error `HTTP 404` with no detail or hint, **exit 4** — the CLI treats the 404 as "not found" |
+| `15` | ERROR | not authorized: credentials missing or not recognized (flat body on HTTP 401) | error `GENESIS status 15 (ERROR) / HTTP 401` with the GENESIS text, plus a credentials hint, exit 1 |
+| `2` | ERROR | wrong username/password or token (flat body on HTTP **404**) | error `GENESIS status 2 (ERROR) / HTTP 404` with the GENESIS text, plus a credentials hint, exit 1 (a 404 carrying a GENESIS code is not "not found") |
 | any | Fehler / Error | general error | error, exit 1 |
 
 ## Value-status placeholders

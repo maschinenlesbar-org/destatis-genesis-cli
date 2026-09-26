@@ -47,10 +47,14 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
     }
     if (err instanceof DestatisApiError) {
       deps.io.err(`Error: ${err.message}`);
-      if (err.httpStatus === 401 || err.httpStatus === 403) {
+      // GENESIS signals a credential failure as HTTP 401/403 and/or a logical
+      // code in a flat JSON body (15 = not authorized, 2 on a 404 = wrong
+      // credentials; the engine extracts the code either way); hint at the fix.
+      if (err.isAuthError) {
         deps.io.err("Hint: check your credentials (--token or --username/--password).");
       }
-      // Map "object not found" (logical 90 / HTTP 404) to a distinct exit code.
+      // Map "object not found" (logical 90 / a bare HTTP 404) to a distinct exit
+      // code. A 404 carrying a GENESIS code (wrong credentials) is not a miss.
       if (err.isNotFound) return 4;
       return 1;
     }

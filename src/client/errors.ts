@@ -12,16 +12,21 @@ export class DestatisError extends Error {
 /**
  * The API signalled a failure. GENESIS-Online is unusual: it answers HTTP 200 for
  * most *logical* errors and carries the real outcome in a `Status` object in the
- * body (see engine.ts). This error therefore models both worlds:
+ * body — while authentication failures arrive as a bare `{ Code, Content, Type }`
+ * object at the top level, on a non-2xx status (verified live: HTTP 401 with
+ * Code 15 for missing credentials, HTTP 404 with Code 2 for wrong credentials —
+ * see engine.ts). This error therefore models both worlds, together when needed:
  *
- *  - `httpStatus` is set for genuine transport/HTTP failures (non-2xx, e.g. a
- *    gateway 502 or an auth-layer 401);
- *  - `code` is set for a GENESIS logical error, taken from `Status.Code`
- *    (e.g. 90 = object not found, 98 = table too large), with `statusType` the
- *    `Status.Type` ("Fehler"/"Error").
+ *  - `httpStatus` is set for transport/HTTP failures (non-2xx, e.g. a gateway
+ *    502 or an auth-layer 401);
+ *  - `code` is set for a GENESIS logical error, taken from `Status.Code` or the
+ *    flat top-level `Code` (e.g. 90 = object not found, 98 = table too large,
+ *    15 = not authorized, 2 = wrong credentials), with `statusType` the `Type`
+ *    ("Fehler"/"ERROR").
  *
- * At least one of the two is always present; `detail` holds the human-readable
- * message (`Status.Content`, or a parsed field from an HTTP error body).
+ * At least one of the two is always present, and both are when a non-2xx reply
+ * carried a GENESIS status body; `detail` holds the human-readable message
+ * (`Status.Content` / `Content`, or a parsed field from an HTTP error body).
  */
 export class DestatisApiError extends DestatisError {
   readonly httpStatus: number | undefined;
@@ -42,10 +47,15 @@ export class DestatisApiError extends DestatisError {
     detail?: string;
   }) {
     const detailPart = args.detail ? `: ${args.detail}` : "";
-    const head =
+    const genesisPart =
       args.code !== undefined
         ? `GENESIS status ${args.code}${args.statusType ? ` (${args.statusType})` : ""}`
-        : `HTTP ${args.httpStatus ?? 0}`;
+        : undefined;
+    const httpPart = args.httpStatus !== undefined ? `HTTP ${args.httpStatus}` : undefined;
+    const head =
+      genesisPart !== undefined && httpPart !== undefined
+        ? `${genesisPart} / ${httpPart}`
+        : (genesisPart ?? httpPart ?? "HTTP 0");
     super(`${head} for ${args.method} ${args.url}${detailPart}`);
     this.httpStatus = args.httpStatus;
     this.code = args.code;
@@ -58,11 +68,30 @@ export class DestatisApiError extends DestatisError {
 
   /**
    * True when the API signalled "no such object": the GENESIS logical code 90
-   * (requested object not found) or a transport-level HTTP 404. Lets the CLI map
-   * a miss to a distinct exit code for scripting.
+   * (requested object not found), or a transport-level HTTP 404 that did NOT
+   * carry a contradicting GENESIS code in its body — the live server answers
+   * wrong credentials with HTTP 404 + `{ Code: 2, ... }`, which is an auth
+   * problem, not a missing object. Lets the CLI map a genuine miss to a
+   * distinct exit code for scripting.
    */
   get isNotFound(): boolean {
-    return this.code === 90 || this.httpStatus === 404;
+    return this.code === 90 || (this.httpStatus === 404 && this.code === undefined);
+  }
+
+  /**
+   * True when the API rejected the credentials: the GENESIS logical code 15
+   * ("Sie sind nicht berechtigt ..." — no/unrecognized credentials), the flat
+   * code 2 on a non-2xx reply (wrong username/password or token — the live
+   * server's HTTP 404 + `{ Code: 2 }`), or a transport-level 401/403. The CLI
+   * appends a credentials hint for these.
+   */
+  get isAuthError(): boolean {
+    return (
+      this.code === 15 ||
+      (this.code === 2 && this.httpStatus !== undefined) ||
+      this.httpStatus === 401 ||
+      this.httpStatus === 403
+    );
   }
 
   /** True for HTTP statuses the engine treats as transient and retries. */

@@ -58,8 +58,8 @@ Ausnahme sind Authentifizierungsfehler: Sie kommen als flacher Body `{ Code, Con
 | `104` | Information | kein Objekt gefunden, das passt | liefert ein **leeres** Ergebnis (Exit 0) |
 | `90` | Fehler | angefordertes Objekt nicht gefunden | Fehler, **Exit 4** |
 | `98` | Information | Ergebnis zu groß für einen direkten Abruf | Fehler mit Hinweisen zum Eingrenzen, Exit 1 |
-| `15` | ERROR | nicht berechtigt: Zugangsdaten fehlen oder werden nicht erkannt (flacher Body bei HTTP 401) | Fehler `HTTP 401` mit Hinweis auf die Zugangsdaten, Exit 1 (der GENESIS-Text wird nicht angezeigt) |
-| `2` | ERROR | falscher Nutzername bzw. falsches Passwort oder Token (flacher Body bei HTTP **404**) | Fehler `HTTP 404` ohne Detail und Hinweis, **Exit 4** – die CLI wertet den 404 als „nicht gefunden“ |
+| `15` | ERROR | nicht berechtigt: Zugangsdaten fehlen oder werden nicht erkannt (flacher Body bei HTTP 401) | Fehler `GENESIS status 15 (ERROR) / HTTP 401` mit dem GENESIS-Text und einem Hinweis auf die Zugangsdaten, Exit 1 |
+| `2` | ERROR | falscher Nutzername bzw. falsches Passwort oder Token (flacher Body bei HTTP **404**) | Fehler `GENESIS status 2 (ERROR) / HTTP 404` mit dem GENESIS-Text und einem Hinweis auf die Zugangsdaten, Exit 1 (ein 404 mit GENESIS-Code heißt nicht „nicht gefunden“) |
 | beliebig | Fehler / Error | allgemeiner Fehler | Fehler, Exit 1 |
 
 ## Platzhalter für den Wertstatus

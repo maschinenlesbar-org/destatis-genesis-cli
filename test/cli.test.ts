@@ -173,6 +173,33 @@ test("a not-found (Status.Code 90) exits 4", async () => {
   assert.equal(code, 4);
 });
 
+test("the live 401 + flat Code 15 reply exits 1 with the GENESIS text and a credentials hint", async () => {
+  const cli = makeCli(() => jsonResponse(fx.flatNotAuthorized, 401));
+  const code = await run([...TOKEN, "catalogue", "tables", "12411*"], cli.deps);
+  assert.equal(code, 1);
+  const errText = cli.err.join("\n");
+  assert.match(errText, /GENESIS status 15/);
+  assert.match(errText, /nicht berechtigt/);
+  assert.match(errText, /Hint: check your credentials/);
+});
+
+test("the live 404 + flat Code 2 reply (wrong credentials) exits 1, not 4, with text and hint", async () => {
+  const cli = makeCli(() => jsonResponse(fx.flatBadCredentials, 404));
+  const code = await run([...TOKEN, "metadata", "table", "12411-0001"], cli.deps);
+  assert.equal(code, 1);
+  const errText = cli.err.join("\n");
+  assert.match(errText, /GENESIS status 2 \(ERROR\) \/ HTTP 404/);
+  assert.match(errText, /Nutzernamen/);
+  assert.match(errText, /Hint: check your credentials/);
+});
+
+test("a bare HTTP 404 still exits 4", async () => {
+  const cli = makeCli(() => jsonResponse({ detail: "nope" }, 404));
+  const code = await run([...TOKEN, "metadata", "table", "12411-0001"], cli.deps);
+  assert.equal(code, 4);
+  assert.doesNotMatch(cli.err.join("\n"), /Hint/);
+});
+
 test("--output writes JSON to a file and keeps stdout clean", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   const code = await run([...TOKEN, "--output", "/tmp/out.json", "catalogue", "tables"], cli.deps);

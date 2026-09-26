@@ -27,7 +27,7 @@ the right slice and decoding it correctly.
 
 This skill drives the `destatis` command. **Before anything else, validate it is available** — run `command -v destatis` (or `destatis --version`). If it is not on your PATH, STOP and inform the user that the `destatis` CLI (`@maschinenlesbar.org/destatis-genesis-cli`) is not installed — installing it is their responsibility; never install it yourself, and do not fall back to `npx` or a local `node dist/...` build.
 
-**Credentials are required** for everything except `destatis hello`. GENESIS needs a free registered account. Supply either an API token via `DESTATIS_API_TOKEN` (or `--token`), or a login via `DESTATIS_USERNAME` + `DESTATIS_PASSWORD` (or `--username`/`--password`). There is **no bundled credential** — register at https://www-genesis.destatis.de. A command run without credentials exits `2` with guidance: stop and tell the user rather than retrying. **Wrong credentials exit `4`**, not `1`: GENESIS answers them with HTTP 404 (its Code 2), and the CLI prints only `Error: HTTP 404 for POST …` with no hint. A bare `HTTP 404` (no `GENESIS status …` in the message) means a login problem, not a missing object — tell the user to check the token or username/password. Confirm access with `destatis logincheck`.
+**Credentials are required** for everything except `destatis hello`. GENESIS needs a free registered account. Supply either an API token via `DESTATIS_API_TOKEN` (or `--token`), or a login via `DESTATIS_USERNAME` + `DESTATIS_PASSWORD` (or `--username`/`--password`). There is **no bundled credential** — register at https://www-genesis.destatis.de. A command run without credentials exits `2` with guidance: stop and tell the user rather than retrying. **Wrong credentials exit `1`** with `GENESIS status 2 (ERROR) / HTTP 404 …` (missing or unrecognised ones: `GENESIS status 15 … / HTTP 401`) and a `Hint: check your credentials` line — stop and tell the user to check the token or username/password; don't retry. Confirm access with `destatis logincheck`.
 
 If you don't have the object code yet, resolve it first with
 **destatis-statistics-finder**. Always cite the response `Copyright` field.
@@ -93,8 +93,7 @@ Source: Statistisches Bundesamt (Destatis), Genesis-Online; DL-DE-BY-2.0.
   `--start-year`/`--end-year`/`--timeslices`/`--class-key`, or download a subset
   (hand off to **destatis-table-download**). Do not retry unchanged.
 - **Not found is exit 4.** A wrong code → `Status.Code 90`. Re-resolve with the
-  finder skill — unless the message is a bare `HTTP 404` with no GENESIS status:
-  that is rejected credentials (see Tooling), so fix the login instead.
+  finder skill.
 - **German number format** — always convert decimal-comma before math, and never
   silently drop value-status symbols.
 - **Empty (`Status.Code 104`, exit 0)** means your filters excluded everything —

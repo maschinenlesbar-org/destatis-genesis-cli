@@ -58,3 +58,23 @@ export const warning = envelope(
 
 export const whoami = { "User-Agent": "destatis-genesis-cli", "User-IP": "203.0.113.7" };
 export const loginOk = { Status: "Sie wurden erfolgreich an- und abgemeldet!", Username: "TESTUSER12" };
+
+// --- Flat (envelope-less) auth errors -------------------------------------------
+// GENESIS answers authentication failures with a bare `{ Code, Content, Type }`
+// object at the top level, on a non-2xx status (seen live 2026-09-15): HTTP 401
+// + Code 15 for missing credentials, HTTP 404 + Code 2 for wrong ones.
+
+/** No credentials sent at all. */
+export const flatNotAuthorized = {
+  Code: 15,
+  Content:
+    "Sie sind nicht berechtigt diesen Service aufzurufen oder der Header Ihres Requests enthält nicht alle notwendigen Angaben, sodass Ihre Zugangsdaten nicht erkannt werden.",
+  Type: "ERROR",
+};
+
+/** Wrong username/password or token. */
+export const flatBadCredentials = {
+  Code: 2,
+  Content: "Ein Fehler ist aufgetreten. (Bitte prüfen und korrigieren Sie Ihren Nutzernamen oder Ihren Token bzw. das Passwort.)",
+  Type: "ERROR",
+};

@@ -69,6 +69,74 @@ test("maps Status.Code 90 to a not-found error", async () => {
   );
 });
 
+test("maps the flat (envelope-less) Code 15 auth error despite HTTP 200", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.flatNotAuthorized)); // HTTP 200, no envelope
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/catalogue/tables", { selection: "12411*" }, {}),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.equal(err.code, 15);
+      assert.equal(err.httpStatus, undefined);
+      assert.ok(err.isAuthError);
+      assert.match(err.message, /GENESIS status 15/);
+      assert.match(err.message, /nicht berechtigt/);
+      return true;
+    },
+  );
+});
+
+test("a 401 with a flat Code 15 body carries both the HTTP status and the GENESIS code", async () => {
+  const mt = makeMockTransport(() => rawResponse(JSON.stringify(fx.flatNotAuthorized), "application/json", 401));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/catalogue/tables", {}, {}),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.equal(err.httpStatus, 401);
+      assert.equal(err.code, 15);
+      assert.ok(err.isAuthError);
+      assert.match(err.message, /GENESIS status 15 \(ERROR\) \/ HTTP 401/);
+      assert.match(err.message, /nicht berechtigt/);
+      return true;
+    },
+  );
+});
+
+test("a 404 with a flat Code 2 body is bad credentials, NOT not-found", async () => {
+  // The live server answers wrong credentials with HTTP 404 + { Code: 2 } —
+  // isNotFound must not fire (that would exit 4 and hide the real problem).
+  const mt = makeMockTransport(() => rawResponse(JSON.stringify(fx.flatBadCredentials), "application/json", 404));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/catalogue/tables", {}, { username: "U", password: "P" }),
+    (err) => {
+      assert.ok(err instanceof DestatisApiError);
+      assert.equal(err.httpStatus, 404);
+      assert.equal(err.code, 2);
+      assert.ok(!err.isNotFound);
+      assert.ok(err.isAuthError);
+      assert.match(err.message, /Nutzernamen/);
+      return true;
+    },
+  );
+});
+
+test("a bare 404 (no GENESIS code) is still not-found", async () => {
+  const mt = makeMockTransport(() => rawResponse("Not Found", "text/plain", 404));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/x", {}, {}),
+    (err) => err instanceof DestatisApiError && err.isNotFound && !err.isAuthError,
+  );
+});
+
+test("a flat non-error body (logincheck / whoami shape) is returned as-is", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.loginOk));
+  const e = new RequestEngine({ transport: mt.transport });
+  assert.deepEqual(await e.postJson("/helloworld/logincheck", {}, {}), fx.loginOk);
+});
+
 test("explains Status.Code 98 (too large) with narrowing guidance", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.tooLarge));
   const e = new RequestEngine({ transport: mt.transport });

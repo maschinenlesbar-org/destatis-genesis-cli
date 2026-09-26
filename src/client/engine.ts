@@ -135,6 +135,31 @@ export function redactUrl(rawUrl: string): string {
   }
 }
 
+/** The `{ Code, Content, Type }` status object of a GENESIS reply. */
+interface GenesisStatus {
+  Code?: unknown;
+  Content?: unknown;
+  Type?: unknown;
+}
+
+/**
+ * Find the GENESIS status in a parsed body: the envelope's `Status` object, or a
+ * flat top-level `{ Code, Content, Type }` (the auth-failure shape). Returns
+ * undefined for anything else — including helloworld/logincheck, whose `Status`
+ * is a plain string, and whoami, which has neither.
+ */
+function genesisStatus(parsed: unknown): GenesisStatus | undefined {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const top = parsed as GenesisStatus & { Status?: unknown };
+  if (top.Status !== undefined) {
+    return top.Status && typeof top.Status === "object" && !Array.isArray(top.Status)
+      ? (top.Status as GenesisStatus)
+      : undefined;
+  }
+  if (typeof top.Code === "number" && typeof top.Type === "string") return top;
+  return undefined;
+}
+
 export class RequestEngine {
   private readonly baseUrl: string;
   private readonly transport: Transport;
@@ -285,11 +310,21 @@ export class RequestEngine {
   }
 
   /**
-   * Inspect a parsed GENESIS envelope for a logical error. GENESIS answers HTTP
-   * 200 even when a request logically failed, carrying the outcome in `Status`.
-   * Throws for "object not found" (90), "too large" (98), and any error `Type`;
-   * returns quietly for success/warning codes and for the "empty result" code
-   * (104), which is a valid outcome the caller renders as an empty list.
+   * Inspect a parsed GENESIS body for a logical error. GENESIS answers HTTP 200
+   * even when a request logically failed. The outcome arrives in one of TWO
+   * shapes:
+   *
+   *  - the usual envelope with a `Status` object (`{ Code, Content, Type }`), or
+   *  - a **flat** top-level `{ Code, Content, Type }` object with no envelope at
+   *    all — the authentication-failure shape (Code 15 when no credentials were
+   *    sent, Code 2 for wrong credentials). The live server pairs those with
+   *    HTTP 401/404 (handled in toApiError); the flat mapping here is kept as a
+   *    defensive path should they ever arrive on a 2xx.
+   *
+   * Throws for "object not found" (90), "too large" (98), and any error `Type`
+   * (which covers the flat auth errors); returns quietly for success/warning
+   * codes and for the "empty result" code (104), which is a valid outcome the
+   * caller renders as an empty list.
    */
   private checkLogicalStatus(
     method: "GET" | "POST",
@@ -297,12 +332,8 @@ export class RequestEngine {
     body: string,
     parsed: unknown,
   ): void {
-    if (!parsed || typeof parsed !== "object") return;
-    const status = (parsed as { Status?: unknown }).Status;
-    // helloworld/logincheck put a plain string in `Status`; only the object form
-    // carries a logical `Code` worth inspecting.
-    if (!status || typeof status !== "object") return;
-    const s = status as { Code?: unknown; Content?: unknown; Type?: unknown };
+    const s = genesisStatus(parsed);
+    if (s === undefined) return;
     const code = typeof s.Code === "number" ? s.Code : undefined;
     if (code === undefined || code === CODE_EMPTY) return;
 
@@ -328,6 +359,14 @@ export class RequestEngine {
     }
   }
 
+  /**
+   * Map a non-2xx reply to a typed error. The live server pairs auth failures
+   * with a GENESIS status JSON body (HTTP 401 + flat `{ Code: 15, ... }` for
+   * missing credentials, HTTP 404 + flat `{ Code: 2, ... }` for wrong ones), so
+   * the body is inspected for a GENESIS status — enveloped or flat — and its
+   * Code/Type/Content are carried onto the error. That keeps a 404-for-bad-
+   * credentials from masquerading as "object not found" (see errors.ts).
+   */
   private toApiError(
     method: "GET" | "POST",
     url: string,
@@ -336,13 +375,22 @@ export class RequestEngine {
   ): DestatisApiError {
     const text = body.toString("utf8");
     let detail: string | undefined;
+    let code: number | undefined;
+    let statusType: string | undefined;
     if (status >= 300 && status < 400) {
       detail = "unexpected redirect — use the canonical host (default https://genesis.destatis.de)";
     } else {
       try {
-        const parsed = JSON.parse(text) as { Status?: { Content?: unknown }; detail?: unknown };
-        if (parsed?.Status && typeof parsed.Status.Content === "string") detail = parsed.Status.Content;
-        else if (typeof parsed?.detail === "string") detail = parsed.detail;
+        const parsed = JSON.parse(text) as unknown;
+        const s = genesisStatus(parsed);
+        if (s) {
+          if (typeof s.Code === "number") code = s.Code;
+          if (typeof s.Type === "string") statusType = s.Type;
+          if (typeof s.Content === "string") detail = s.Content;
+        } else if (parsed && typeof parsed === "object") {
+          const d = (parsed as { detail?: unknown }).detail;
+          if (typeof d === "string") detail = d;
+        }
       } catch {
         // Not JSON. Surface a short, whitespace-collapsed snippet of a textual
         // body (e.g. GENESIS' plain-text 500 "…pDirectory is null") so the
@@ -354,10 +402,19 @@ export class RequestEngine {
           detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
         }
       }
-      // Both branches take server-controlled text; strip terminal control chars
+      // All branches take server-controlled text; strip terminal control chars
       // before it reaches stderr.
       if (detail !== undefined) detail = sanitizeServerText(detail);
+      if (statusType !== undefined) statusType = sanitizeServerText(statusType);
     }
-    return new DestatisApiError({ httpStatus: status, url: redactUrl(url), method, body: text, detail });
+    return new DestatisApiError({
+      httpStatus: status,
+      url: redactUrl(url),
+      method,
+      body: text,
+      ...(code !== undefined ? { code } : {}),
+      ...(statusType !== undefined ? { statusType } : {}),
+      detail,
+    });
   }
 }
