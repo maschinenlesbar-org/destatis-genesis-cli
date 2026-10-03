@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
 import { DestatisValidationError } from "../src/client/errors.js";
 import type { Transport } from "../src/client/http.js";
-import { CRITERIA, FIND_CATEGORIES, LANGUAGES } from "../src/client/params.js";
+import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES } from "../src/client/params.js";
 import { buildProgram } from "../src/cli/program.js";
 import type { Command } from "commander";
 import { jsonResponse, parity, requestKey, rawResponse, type ParityResult } from "./helpers.js";
@@ -230,4 +230,62 @@ test("parity #7: the CLI's choices are the library's exported value lists", () =
   const tables = program.commands.find((c) => c.name() === "catalogue")!.commands.find((c) => c.name() === "tables")!;
   assert.deepEqual(choices(tables, "--search-criterion"), [...CRITERIA]);
   assert.deepEqual(choices(tables, "--sort-criterion"), [...CRITERIA]);
+});
+
+// ---- Finding 8 (PAT-12): the data file --format list --------------------------------
+
+const formatCases: Array<{ label: string; argv: string[]; lib: (c: DestatisClient) => Promise<unknown> }> = [
+  {
+    label: "data tablefile --format XLSX",
+    argv: ["data", "tablefile", "12411-0001", "--format", "XLSX"],
+    lib: (c) => c.data.tableFile("12411-0001", { format: "XLSX" as never }),
+  },
+  {
+    label: "data cubefile --format pdf",
+    argv: ["data", "cubefile", "12411BJ001", "--format", "pdf"],
+    lib: (c) => c.data.cubeFile("12411BJ001", { format: "pdf" as never }),
+  },
+  {
+    label: "data timeseriesfile --format zip",
+    argv: ["data", "timeseriesfile", "N", "--format", "zip"],
+    lib: (c) => c.data.timeseriesFile("N", { format: "zip" as never }),
+  },
+  {
+    label: "data resultfile --format ''",
+    argv: ["data", "resultfile", "N", "--format", ""],
+    lib: (c) => c.data.resultFile("N", { format: "" as never }),
+  },
+  {
+    label: "data tablefile --format ' csv'",
+    argv: ["data", "tablefile", "12411-0001", "--format", " csv"],
+    lib: (c) => c.data.tableFile("12411-0001", { format: " csv" as never }),
+  },
+];
+
+for (const fc of formatCases) {
+  test(`parity #8: ${fc.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...TOKEN, "-o", "out.zip", ...fc.argv],
+      lib: (t) => fc.lib(client(t)),
+      responder: ZIP,
+    });
+    assertBothReject(p, /^Invalid format: Allowed choices are datencsv, csv, ffcsv, xlsx, html, genml\.$/);
+  });
+}
+
+test("parity #8 control: data tablefile --format xlsx sends the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", ...TOKEN, "--language", "de", "-o", "out.zip", "data", "tablefile", "12411-0001", "--format", "xlsx"],
+    lib: (t) => client(t).data.tableFile("12411-0001", { language: "de", format: "xlsx" }),
+    responder: ZIP,
+  });
+  assertSameRequest(p);
+});
+
+test("parity #8: the CLI's --format choices are the library's DATA_FILE_FORMATS", () => {
+  const data = buildProgram().commands.find((c) => c.name() === "data")!;
+  for (const name of ["tablefile", "cubefile", "timeseriesfile", "resultfile"]) {
+    const cmd = data.commands.find((c) => c.name() === name)!;
+    assert.deepEqual(cmd.options.find((o) => o.long === "--format")?.argChoices, [...DATA_FILE_FORMATS]);
+  }
 });

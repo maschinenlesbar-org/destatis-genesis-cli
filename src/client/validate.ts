@@ -9,7 +9,7 @@
 //     message `Invalid <name>: <reason>`.
 
 import { DestatisValidationError } from "./errors.js";
-import { CRITERIA, FIND_CATEGORIES, LANGUAGES } from "./params.js";
+import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES } from "./params.js";
 
 /** Returns why `value` is invalid, or `undefined` when it is valid. */
 export type Problem<T = unknown> = (value: T) => string | undefined;
@@ -48,6 +48,7 @@ const CHOICES: Readonly<Record<string, Problem<unknown>>> = {
   category: oneOfProblem(FIND_CATEGORIES),
   searchcriterion: oneOfProblem(CRITERIA),
   sortcriterion: oneOfProblem(CRITERIA),
+  format: oneOfProblem(DATA_FILE_FORMATS),
 };
 
 /**

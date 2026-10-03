@@ -3,7 +3,7 @@
 // are simply not sent. The client checks the given values before any request
 // (see validate.ts): a blank string (empty or whitespace only) is rejected with
 // DestatisValidationError, since GENESIS reads an empty parameter as "no
-// filter". The enumerated parameters (language, category, the criteria) must be
+// filter". The enumerated parameters (language, category, the criteria, format) must be
 // one of the values exported below. Valid values are sent as-is, never trimmed.
 
 /** Response languages GENESIS offers (`language`). */
@@ -82,8 +82,10 @@ export interface DataTableParams {
   language?: Language;
 }
 
-/** File-download output formats offered by the `data/*file` endpoints. */
-export type DataFileFormat = "datencsv" | "csv" | "ffcsv" | "xlsx" | "html" | "genml";
+/** File-download output formats offered by the `data/*file` endpoints (`format`). */
+export const DATA_FILE_FORMATS = ["datencsv", "csv", "ffcsv", "xlsx", "html", "genml"] as const;
+/** A file-download output format. */
+export type DataFileFormat = (typeof DATA_FILE_FORMATS)[number];
 
 /** Parameters for the `data/*file` download endpoints (returns a ZIP wrapper). */
 export interface DataFileParams extends DataTableParams {

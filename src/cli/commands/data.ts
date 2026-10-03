@@ -6,11 +6,14 @@ import { Option, type Command } from "commander";
 import type { CliDeps } from "../io.js";
 import type { DestatisClient } from "../../client/client.js";
 import type { RawResponse } from "../../client/engine.js";
-import type { DataFileParams, DataFileFormat, DataTableParams } from "../../client/params.js";
+import {
+  DATA_FILE_FORMATS,
+  type DataFileFormat,
+  type DataFileParams,
+  type DataTableParams,
+} from "../../client/params.js";
 import { action, parseIntArg, parseNonEmpty, renderJson, renderRaw } from "../shared.js";
 import type { GlobalOptions } from "../shared.js";
-
-const FORMATS = ["datencsv", "csv", "ffcsv", "xlsx", "html", "genml"] as const;
 
 type JsonFn = (c: DestatisClient, name: string, p: DataTableParams) => Promise<unknown>;
 type FileFn = (c: DestatisClient, name: string, p: DataFileParams) => Promise<RawResponse>;
@@ -106,7 +109,7 @@ export function registerDataCommands(program: Command, deps: CliDeps): void {
       .command(sub.name)
       .description(sub.desc)
       .argument("<name>", "object code (must be non-empty)", parseNonEmpty)
-      .addOption(new Option("--format <fmt>", "download format").choices([...FORMATS]));
+      .addOption(new Option("--format <fmt>", "download format").choices([...DATA_FILE_FORMATS]));
     addDataOptions(cmd).action(
       action(deps, async ({ client, global, opts }, [name]) => {
         const params: DataFileParams = buildDataParams(opts, global);
