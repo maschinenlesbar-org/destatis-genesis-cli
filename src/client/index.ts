@@ -23,7 +23,7 @@ export {
   DestatisValidationError,
   DestatisParseError,
 } from "./errors.js";
-export { assertValid } from "./validate.js";
+export { assertRequestParams, assertValid, nonBlankProblem } from "./validate.js";
 export type { Problem } from "./validate.js";
 
 export * from "./params.js";

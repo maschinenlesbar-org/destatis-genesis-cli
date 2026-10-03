@@ -56,7 +56,11 @@ into commander's `InvalidArgumentError` (exit 2 too).
 
 What the library rejects:
 
-- (filled in per rule as the rules move into the library)
+- **Blank text** (`nonBlankProblem`, `assertRequestParams`): a blank (`""` or
+  whitespace-only) object `name`, `find` `term`, or any given string parameter
+  (`selection`, `area`, `type`, `regionalkey`, `classifyingkey1`, …). GENESIS reads
+  an empty parameter as "no filter", so it would silently return unfiltered data.
+  `undefined` still means "omitted". The CLI's `parseNonEmpty` calls the same rule.
 
 ## GENESIS-specific divergences
 

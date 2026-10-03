@@ -1,6 +1,9 @@
 // Strongly-typed parameter objects for the GENESIS-Online endpoints. Every field
 // is optional (credentials are injected separately by the client); omitted fields
-// are simply not sent. Values are passed through to the query string as-is.
+// are simply not sent. The client checks the given values before any request
+// (see validate.ts): a blank string (empty or whitespace only) is rejected with
+// DestatisValidationError, since GENESIS reads an empty parameter as "no
+// filter". Valid values are sent as-is, never trimmed.
 
 /** Object types `find/find` can search. */
 export type FindCategory = "all" | "tables" | "statistics" | "cubes" | "variables" | "time-series";
