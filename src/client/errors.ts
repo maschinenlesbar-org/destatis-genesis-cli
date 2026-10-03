@@ -122,12 +122,20 @@ export class DestatisApiError extends DestatisError {
 export class DestatisNetworkError extends DestatisError {}
 
 /**
- * A CLI usage error (bad/missing argument or credentials detected before any
+ * A usage error (bad/missing argument or credentials detected before any
  * request, e.g. only one of --username/--password, or a credential-required
  * command invoked with none). Mapped to the conventional usage exit code 2 so
  * scripts can distinguish it from a runtime error (1).
  */
 export class DestatisUsageError extends DestatisError {}
+
+/**
+ * The library rejected an input before sending any request (message
+ * `Invalid <name>: <reason>`, see `validate.ts`). It extends
+ * `DestatisUsageError`, so existing `instanceof DestatisUsageError` checks keep
+ * catching it, and the CLI maps it to the usage exit code 2.
+ */
+export class DestatisValidationError extends DestatisUsageError {}
 
 /** The response body could not be parsed as the expected JSON shape. */
 export class DestatisParseError extends DestatisError {}

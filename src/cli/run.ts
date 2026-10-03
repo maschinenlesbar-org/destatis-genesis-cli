@@ -5,7 +5,12 @@
 import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
 import type { CliDeps } from "./io.js";
-import { DestatisApiError, DestatisError, DestatisUsageError } from "../client/errors.js";
+import {
+  DestatisApiError,
+  DestatisError,
+  DestatisUsageError,
+  DestatisValidationError,
+} from "../client/errors.js";
 
 /**
  * Apply exitOverride + output redirection to every command in the tree.
@@ -40,8 +45,10 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       // 1 and 2. See DEVELOPING.md's exit-code table.
       return err.exitCode === 0 ? 0 : 2;
     }
-    if (err instanceof DestatisUsageError) {
-      // Bad/missing arguments or credentials -> conventional usage exit code.
+    if (err instanceof DestatisValidationError || err instanceof DestatisUsageError) {
+      // Bad/missing arguments or credentials -> conventional usage exit code. A
+      // DestatisValidationError is the library rejecting an input before any
+      // request (it extends DestatisUsageError; named here for clarity).
       deps.io.err(`Error: ${err.message}`);
       return 2;
     }

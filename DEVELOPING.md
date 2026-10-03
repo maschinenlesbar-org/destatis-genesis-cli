@@ -12,10 +12,11 @@ src/
   client/        # typed API client, usable as a library independent of the CLI
     types.ts     # GENESIS envelope + catalogue/find list items (opaque data/metadata Objects)
     params.ts    # per-endpoint parameter interfaces
+    validate.ts  # input rules (…Problem functions) + assertValid
     query.ts     # dependency-free query-string builder
     http.ts      # Transport interface + default node:http/https transport
     engine.ts    # URL building, retry, Status.Code logical-error mapping, URL redaction
-    errors.ts    # Destatis{Error,ApiError,NetworkError,UsageError,ParseError}
+    errors.ts    # Destatis{Error,ApiError,NetworkError,UsageError,ValidationError,ParseError}
     client.ts    # DestatisClient — helloworld/find + catalogue/metadata/data groups
     index.ts
   cli/
@@ -39,6 +40,23 @@ npm run typecheck
 npm test            # pretest builds, then node --test dist/test/*.test.js
 npm start -- --help # run the built CLI
 ```
+
+## Library input validation
+
+The library owns every rule about what a request may contain; the CLI only turns
+argv strings into typed values and calls the same rules. The rules are pure,
+exported `…Problem(value)` functions in `src/client/validate.ts` (they return the
+reason a value is invalid, or `undefined`). The client enforces them before any
+request through `assertValid(name, value, problem)`, which throws
+**`DestatisValidationError`** (`Invalid <name>: <reason>`); a client method
+rejects its promise, a constructor throws. `DestatisValidationError` extends
+`DestatisUsageError`, so `run.ts` maps it to exit 2 and prints `Error: <message>`.
+The CLI's commander parsers call the same `…Problem` functions and turn a reason
+into commander's `InvalidArgumentError` (exit 2 too).
+
+What the library rejects:
+
+- (filled in per rule as the rules move into the library)
 
 ## GENESIS-specific divergences
 
