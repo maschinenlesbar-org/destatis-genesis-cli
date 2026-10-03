@@ -83,13 +83,24 @@ What the library rejects:
   CLI usage error, because it would silently cancel an env credential. Messages
   never echo the value. The CLI's `parseHeaderValue`/`parseCredential` (and the
   env-var check in `program.ts`) call the same rules.
-- **Base URL** (`baseUrlProblem`, run on the raw `baseUrl` before the
-  trailing-slash strip): embedded userinfo (`https://u:p@host` would become a Basic
-  `Authorization` header; GENESIS never uses Basic auth), surrounding whitespace
-  (`"https://h/ "` requested `/%20/…`), and whitespace or control characters inside
-  it. The scheme and `?`/`#` rules are checked by the engine's `assertHttpScheme`,
-  which still throws `DestatisNetworkError`. `parseBaseUrl` calls `baseUrlProblem`
-  and only appends the flag hint for an embedded credential.
+- **Base URL** (`baseUrlProblem`, run by the engine constructor on the raw
+  `baseUrl` before the trailing-slash strip): an unparsable URL, a scheme other
+  than `http:`/`https:`, embedded userinfo (`https://u:p@host` would become a Basic
+  `Authorization` header; GENESIS never uses Basic auth), a query or fragment
+  (request paths are appended as a string, so `?`/`#` would swallow them),
+  surrounding whitespace (`"https://h/ "` requested `/%20/…`), and whitespace or
+  control characters inside it. This is a configuration error, so it throws
+  `DestatisValidationError`, not `DestatisNetworkError`; only the default
+  transport's per-hop scheme check (`http.ts`) is a network error. Messages never
+  echo the URL. `parseBaseUrl` calls `baseUrlProblem` and only appends the flag
+  hint for an embedded credential.
+- **Numeric engine options** (`intRangeProblem`): `timeoutMs` (0..`MAX_TIMEOUT_MS`),
+  `maxRetries` (0..`MAX_RETRIES`, 10), `retryDelayMs` (0..`MAX_RETRY_AFTER_MS`) and
+  `maxResponseBytes` (0..`Number.MAX_SAFE_INTEGER`) must be integers in range;
+  `undefined` keeps the default. A constructor-time rejection is a
+  `DestatisValidationError` (`Invalid maxRetries: Must be <= 10.`) with the same
+  reason the CLI's `parseBoundedInt`/`parseIntArg` give for `--timeout`,
+  `--max-retries` and `--max-response-bytes`.
 - **Half a credential pair** (`credentialPairProblem`): with no token, a
   `username` without a `password` (or the reverse) throws at construction —
   `Invalid credentials: Provide both username and password (or a token).` A lone

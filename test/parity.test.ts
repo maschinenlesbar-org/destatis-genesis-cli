@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
-import { DestatisValidationError } from "../src/client/errors.js";
+import { DestatisNetworkError, DestatisValidationError } from "../src/client/errors.js";
 import type { Transport } from "../src/client/http.js";
 import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES, MAX_PAGELENGTH } from "../src/client/params.js";
 import { buildProgram } from "../src/cli/program.js";
@@ -668,6 +668,60 @@ test("parity #6 control: catalogue jobs with a token sends the identical request
     argv: ["--compact", ...TOKEN, "catalogue", "jobs"],
     lib: (t) => client(t).catalogue.jobs(),
     responder: () => jsonResponse(fx.tablesList),
+  });
+  assertSameRequest(p);
+});
+
+// ---- Finding 10 (PAT-2/PAT-8/PAT-23): base URL and numeric engine options --------------
+
+const configCases: Array<{ label: string; argv: string[]; opts: Omit<DestatisClientOptions, "transport">; msg: RegExp; reason?: string }> = [
+  { label: "--base-url ftp://h.example", argv: ["--base-url", "ftp://h.example"], opts: { baseUrl: "ftp://h.example" },
+    msg: /^Invalid baseUrl: Only "http:" and "https:" URLs are allowed\.$/, reason: 'Only "http:" and "https:" URLs are allowed.' },
+  { label: "--base-url https://h.example/?q=1", argv: ["--base-url", "https://h.example/?q=1"], opts: { baseUrl: "https://h.example/?q=1" },
+    msg: /^Invalid baseUrl: A base URL cannot have a query \(\?\) or fragment \(#\)\.$/, reason: "A base URL cannot have a query (?) or fragment (#)." },
+  { label: "--base-url https://h.example/#f", argv: ["--base-url", "https://h.example/#f"], opts: { baseUrl: "https://h.example/#f" },
+    msg: /^Invalid baseUrl: A base URL cannot have a query/ },
+  { label: "--base-url ''", argv: ["--base-url", ""], opts: { baseUrl: "" },
+    msg: /^Invalid baseUrl: Must be an absolute http\(s\) URL\.$/, reason: "Must be an absolute http(s) URL." },
+  { label: "--base-url 'not a url'", argv: ["--base-url", "not a url"], opts: { baseUrl: "not a url" },
+    msg: /^Invalid baseUrl: Must be an absolute http\(s\) URL\.$/ },
+  { label: "--timeout -1", argv: ["--timeout", "-1"], opts: { timeoutMs: -1 },
+    msg: /^Invalid timeoutMs: Expected a non-negative integer\.$/, reason: "Expected a non-negative integer." },
+  { label: "--timeout 2147483648", argv: ["--timeout", "2147483648"], opts: { timeoutMs: 2_147_483_648 },
+    msg: /^Invalid timeoutMs: Must be <= 2147483647\.$/, reason: "Must be <= 2147483647." },
+  { label: "--max-retries 11", argv: ["--max-retries", "11"], opts: { maxRetries: 11 },
+    msg: /^Invalid maxRetries: Must be <= 10\.$/, reason: "Must be <= 10." },
+  { label: "--max-response-bytes -1", argv: ["--max-response-bytes", "-1"], opts: { maxResponseBytes: -1 },
+    msg: /^Invalid maxResponseBytes: Expected a non-negative integer\.$/ },
+];
+
+for (const cc of configCases) {
+  test(`parity #10: ${cc.label} is a validation error on both sides, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...cc.argv, "hello"],
+      lib: (t) => new DestatisClient({ ...cc.opts, transport: t }).whoami(),
+      responder: () => jsonResponse(fx.whoami),
+    });
+    assertBothReject(p, cc.msg);
+    if (!p.lib.ok) assert.ok(!(p.lib.error instanceof DestatisNetworkError), "a config error is not a network error");
+    if (cc.reason !== undefined) assert.ok(p.cli.err.includes(cc.reason), `CLI reason: ${p.cli.err}`);
+  });
+}
+
+test("parity #10: a bad base URL message never echoes embedded userinfo", async () => {
+  const p = await parity({
+    argv: ["--compact", "--base-url", "ftp://SECRETUSER:HUNTER2@h.example", "hello"],
+    lib: (t) => new DestatisClient({ baseUrl: "ftp://SECRETUSER:HUNTER2@h.example", transport: t }).whoami(),
+  });
+  assertBothReject(p);
+  assert.doesNotMatch(String(p.lib.ok ? "" : (p.lib.error as Error).message), /SECRETUSER|HUNTER2/);
+});
+
+test("parity #10 control: --timeout 0 --max-retries 10 --max-response-bytes 0 sends the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", "--timeout", "0", "--max-retries", "10", "--max-response-bytes", "0", "find", "Bev"],
+    lib: (t) => new DestatisClient({ timeoutMs: 0, maxRetries: 10, maxResponseBytes: 0, transport: t }).find({ term: "Bev" }),
+    responder: () => jsonResponse(fx.findResult),
   });
   assertSameRequest(p);
 });

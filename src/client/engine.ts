@@ -12,8 +12,8 @@
 
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { DestatisApiError, DestatisError, DestatisNetworkError, DestatisParseError } from "./errors.js";
-import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem } from "./validate.js";
+import { DestatisApiError, DestatisParseError } from "./errors.js";
+import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
@@ -36,8 +36,10 @@ export interface RawResponse {
 
 /**
  * Options for {@link RequestEngine} and the client. The numeric options must be
- * integers within their documented range; anything else (negative, fractional,
- * NaN, Infinity, too large) makes the constructor throw a DestatisError.
+ * integers within their documented range, and `baseUrl` an http(s) URL without
+ * userinfo, query, fragment or whitespace; anything else (negative, fractional,
+ * NaN, Infinity, too large; `ftp:`, `?x=1`, ...) makes the constructor throw a
+ * DestatisValidationError before any request.
  */
 export interface EngineOptions {
   /** Base URL of the API. Defaults to https://genesis.destatis.de */
@@ -111,49 +113,18 @@ export function parseRetryAfter(
   return Number.isNaN(when) ? undefined : Math.max(0, when - now);
 }
 
-/**
- * Reject a base URL whose scheme is not http(s), or that has a query or fragment.
- * The default transport already gates the scheme per hop, but the engine is
- * exported as a library and may be handed a custom transport that does no such
- * check, so gate the configured base URL here too (a `file:`/`ftp:` base URL fails
- * fast with a typed error). Request paths are appended to the base URL as a
- * string, so a `?` or `#` in it would swallow every path: `http://h/?x=1` requests
- * `/?x=1/genesisWS/...` and `http://h/#f` requests `/`. The URL in the message
- * goes through `redactUrl`, as every other URL this engine reports does.
- */
-function assertHttpScheme(baseUrl: string): void {
-  let url: URL;
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    throw new DestatisNetworkError(`Invalid base URL: ${baseUrl}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new DestatisNetworkError(
-      `Unsupported protocol "${url.protocol}" in base URL: ${redactUrl(baseUrl)}`,
-    );
-  }
-  if (/[?#]/.test(baseUrl)) {
-    throw new DestatisNetworkError(`Base URL must not contain a query or fragment: ${redactUrl(baseUrl)}`);
-  }
-}
-
 /** Most automatic retries a caller may ask for (the CLI's --max-retries shares it). */
 export const MAX_RETRIES = 10;
 
 /**
  * Read a numeric engine option: `undefined` gives the default; anything but an
- * integer in [0, max] throws. Without this a negative or NaN `timeoutMs` silently
- * disabled the timeout, and `maxResponseBytes: -1` the size cap.
+ * integer in [0, max] throws `DestatisValidationError` (`intRangeProblem`, the
+ * rule the CLI's integer parsers use too). Without this a negative or NaN
+ * `timeoutMs` silently disabled the timeout, and `maxResponseBytes: -1` the size cap.
  */
 function intOption(name: string, value: number | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
-  if (!Number.isSafeInteger(value) || value < 0 || value > max) {
-    throw new DestatisError(
-      `Invalid option ${name}: expected an integer from 0 to ${max}, got ${String(value)}.`,
-    );
-  }
-  return value;
+  return assertValid(name, value, intRangeProblem(0, max));
 }
 
 const realSleep = (ms: number): Promise<void> =>
@@ -301,11 +272,14 @@ export class RequestEngine {
 
   constructor(options: EngineOptions = {}) {
     const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    assertHttpScheme(this.baseUrl);
-    // The rest of the base-URL rules (userinfo, whitespace), on the raw value —
-    // before the trailing-slash strip, so "https://h/ " cannot slip through.
+    // Every base-URL rule (http(s) only, no userinfo, query, fragment or
+    // whitespace), on the raw value — before the trailing-slash strip, so
+    // "https://h/ " cannot slip through. A bad base URL is a configuration error
+    // (DestatisValidationError), not a network failure; the default transport
+    // still checks the scheme per hop. The default transport is not the only
+    // one: the engine is exported and may be handed a custom transport.
     assertValid("baseUrl", baseUrl, baseUrlProblem);
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.transport = options.transport ?? nodeHttpTransport;
     // Only `undefined` selects the default; a given value must be a valid header
     // value (a blank one is rejected, not silently replaced).

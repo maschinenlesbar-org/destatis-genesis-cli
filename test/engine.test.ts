@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter, redactUrl } from "../src/client/engine.js";
 import {
   DestatisApiError,
-  DestatisError,
   DestatisNetworkError,
   DestatisParseError,
   DestatisValidationError,
@@ -445,8 +444,9 @@ test("numeric engine options must be integers in range (a negative timeoutMs no 
     assert.throws(
       () => new RequestEngine(opts),
       (err) =>
-        err instanceof DestatisError &&
-        err.message.startsWith(`Invalid option ${name}: expected an integer from 0 to `),
+        err instanceof DestatisValidationError &&
+        /^Invalid \w+: (Expected a non-negative integer|Must be <= \d+)\.$/.test(err.message) &&
+        err.message.startsWith(`Invalid ${name}: `),
       JSON.stringify(opts),
     );
   }
@@ -460,7 +460,10 @@ test("a non-http(s) base URL is rejected at construction, before any request", (
     const mt = makeMockTransport(() => jsonResponse(fx.whoami));
     assert.throws(
       () => new RequestEngine({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof DestatisNetworkError && /Unsupported protocol/.test(err.message),
+      (err) =>
+        err instanceof DestatisValidationError &&
+        !(err instanceof DestatisNetworkError) &&
+        err.message === 'Invalid baseUrl: Only "http:" and "https:" URLs are allowed.',
     );
     assert.equal(mt.calls.length, 0);
   }
@@ -470,7 +473,9 @@ test("a base URL with a query or fragment is rejected at construction", () => {
   for (const baseUrl of ["https://example.test/?x=1", "https://example.test/#f"]) {
     assert.throws(
       () => new RequestEngine({ baseUrl }),
-      (err) => err instanceof DestatisNetworkError && /must not contain a query or fragment/.test(err.message),
+      (err) =>
+        err instanceof DestatisValidationError &&
+        err.message === "Invalid baseUrl: A base URL cannot have a query (?) or fragment (#).",
     );
   }
 });
@@ -479,7 +484,7 @@ test("an unparseable base URL is rejected at construction", () => {
   const mt = makeMockTransport(() => jsonResponse(fx.whoami));
   assert.throws(
     () => new RequestEngine({ baseUrl: "not a url", transport: mt.transport }),
-    (err) => err instanceof DestatisNetworkError && /Invalid base URL/.test(err.message),
+    (err) => err instanceof DestatisValidationError && err.message === "Invalid baseUrl: Must be an absolute http(s) URL.",
   );
   assert.equal(mt.calls.length, 0);
 });
@@ -487,7 +492,7 @@ test("an unparseable base URL is rejected at construction", () => {
 test("the base-URL scheme error does not leak embedded userinfo", () => {
   assert.throws(
     () => new RequestEngine({ baseUrl: "ftp://SECRETUSER:HUNTER2@example.org" }),
-    (err) => err instanceof DestatisNetworkError && !/SECRETUSER|HUNTER2/.test(err.message),
+    (err) => err instanceof DestatisValidationError && !/SECRETUSER|HUNTER2/.test(err.message),
   );
 });
 

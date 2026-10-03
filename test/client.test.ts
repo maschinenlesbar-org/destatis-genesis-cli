@@ -4,7 +4,7 @@ import { DestatisClient, type DestatisClientOptions } from "../src/client/client
 import { makeMockTransport, jsonResponse, bodyOf, type MockTransport } from "./helpers.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import * as fx from "./fixtures.js";
-import { DestatisNetworkError, DestatisValidationError } from "../src/client/errors.js";
+import { DestatisValidationError } from "../src/client/errors.js";
 
 function client(
   responder: (req: HttpRequest) => HttpResponse,
@@ -139,7 +139,7 @@ test("a client with a custom transport rejects a non-http(s) base URL before sen
     const mt = makeMockTransport(() => jsonResponse(fx.whoami));
     assert.throws(
       () => new DestatisClient({ baseUrl, username: "USER", password: "PASS", transport: mt.transport }),
-      (err) => err instanceof DestatisNetworkError && /Unsupported protocol/.test(err.message),
+      (err) => err instanceof DestatisValidationError && /^Invalid baseUrl: Only "http:" and "https:"/.test(err.message),
     );
     assert.equal(mt.calls.length, 0);
   }
