@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
 import { DestatisValidationError } from "../src/client/errors.js";
 import type { Transport } from "../src/client/http.js";
-import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES } from "../src/client/params.js";
+import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES, MAX_PAGELENGTH } from "../src/client/params.js";
 import { buildProgram } from "../src/cli/program.js";
 import type { Command } from "commander";
 import { jsonResponse, parity, requestKey, rawResponse, type ParityResult } from "./helpers.js";
@@ -326,4 +326,47 @@ test("parity #9: --help names the server defaults for --language and --category"
   assert.match(p.cli.out, /--language <lang>\s+response language \(server default: de\)/);
   const f = await parity({ argv: ["find", "--help"], lib: async () => undefined });
   assert.match(f.cli.out, /server default: all/);
+});
+
+// ---- Finding 2 (PAT-11): pagelength 1..MAX_PAGELENGTH, timeslices >= 0 -------------
+
+const boundCases: Array<{ label: string; argv: string[]; lib: (c: DestatisClient) => Promise<unknown>; msg: RegExp; zip?: boolean }> = [
+  { label: "find --pagelength 0", argv: ["--pagelength", "0", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: 0 }), msg: /^Invalid pagelength: Must be >= 1\.$/ },
+  { label: "find --pagelength -1", argv: ["--pagelength", "-1", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: -1 }), msg: /^Invalid pagelength: Expected a non-negative integer\.$/ },
+  { label: "find --pagelength 1.5", argv: ["--pagelength", "1.5", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: 1.5 }), msg: /^Invalid pagelength: Expected a non-negative integer\.$/ },
+  { label: "find --pagelength NaN", argv: ["--pagelength", "NaN", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: NaN }), msg: /^Invalid pagelength: Expected a non-negative integer\.$/ },
+  { label: "find --pagelength 25001", argv: ["--pagelength", "25001", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: 25001 }), msg: /^Invalid pagelength: Must be <= 25000\.$/ },
+  { label: "find --pagelength 1e20", argv: ["--pagelength", "99999999999999999999", "find", "Bev"], lib: (c) => c.find({ term: "Bev", pagelength: 1e20 }), msg: /^Invalid pagelength: Expected a non-negative integer\.$/ },
+  { label: "catalogue values --pagelength 30000", argv: [...TOKEN, "--pagelength", "30000", "catalogue", "values", "1*"], lib: (c) => c.catalogue.values({ selection: "1*", pagelength: 30000 }), msg: /^Invalid pagelength: Must be <= 25000\.$/ },
+  { label: "data table --timeslices -1", argv: [...TOKEN, "data", "table", "12411-0001", "--timeslices", "-1"], lib: (c) => c.data.table("12411-0001", { timeslices: -1 }), msg: /^Invalid timeslices: Expected a non-negative integer\.$/ },
+  { label: "data table --timeslices 1.5", argv: [...TOKEN, "data", "table", "12411-0001", "--timeslices", "1.5"], lib: (c) => c.data.table("12411-0001", { timeslices: 1.5 }), msg: /^Invalid timeslices: Expected a non-negative integer\.$/ },
+  { label: "data table --timeslices Infinity", argv: [...TOKEN, "data", "table", "12411-0001", "--timeslices", "Infinity"], lib: (c) => c.data.table("12411-0001", { timeslices: Infinity }), msg: /^Invalid timeslices: Expected a non-negative integer\.$/ },
+  { label: "data timeseries --timeslices NaN", argv: [...TOKEN, "data", "timeseries", "N", "--timeslices", "NaN"], lib: (c) => c.data.timeseries("N", { timeslices: NaN }), msg: /^Invalid timeslices: Expected a non-negative integer\.$/ },
+  { label: "data cubefile --timeslices -1", argv: [...TOKEN, "-o", "out.zip", "data", "cubefile", "N", "--timeslices", "-1"], lib: (c) => c.data.cubeFile("N", { timeslices: -1 }), msg: /^Invalid timeslices: Expected a non-negative integer\.$/, zip: true },
+];
+
+for (const bc of boundCases) {
+  test(`parity #2: ${bc.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...bc.argv],
+      lib: (t) => bc.lib(client(t)),
+      responder: bc.zip ? ZIP : () => jsonResponse(fx.findResult),
+    });
+    assertBothReject(p, bc.msg);
+  });
+}
+
+test("parity #2 control: --pagelength 25000 and --timeslices 0 send the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", "--pagelength", "25000", "find", "Bev"],
+    lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev", pagelength: MAX_PAGELENGTH }),
+    responder: () => jsonResponse(fx.findResult),
+  });
+  assertSameRequest(p);
+  const d = await parity({
+    argv: ["--compact", ...TOKEN, "data", "table", "12411-0001", "--timeslices", "0"],
+    lib: (t) => client(t).data.table("12411-0001", { timeslices: 0 }),
+    responder: () => jsonResponse(fx.dataTable),
+  });
+  assertSameRequest(d);
 });

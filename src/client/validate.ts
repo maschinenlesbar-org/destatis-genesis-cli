@@ -9,7 +9,7 @@
 //     message `Invalid <name>: <reason>`.
 
 import { DestatisValidationError } from "./errors.js";
-import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES } from "./params.js";
+import { CRITERIA, DATA_FILE_FORMATS, FIND_CATEGORIES, LANGUAGES, MAX_PAGELENGTH } from "./params.js";
 
 /** Returns why `value` is invalid, or `undefined` when it is valid. */
 export type Problem<T = unknown> = (value: T) => string | undefined;
@@ -42,8 +42,25 @@ export function oneOfProblem(allowed: readonly string[]): Problem<unknown> {
     (allowed as readonly unknown[]).includes(value) ? undefined : `Allowed choices are ${allowed.join(", ")}.`;
 }
 
-/** The enumerated GENESIS request parameters and their allowed values. */
-const CHOICES: Readonly<Record<string, Problem<unknown>>> = {
+/**
+ * A value must be a safe integer from `min` to `max` (`min` >= 0). The reasons
+ * are worded like the CLI's integer parsers.
+ */
+export function intRangeProblem(min: number, max: number): Problem<unknown> {
+  return (value) => {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+      return "Expected a non-negative integer.";
+    }
+    if (value < min) return `Must be >= ${min}.`;
+    if (value > max) return `Must be <= ${max}.`;
+    return undefined;
+  };
+}
+
+/** The GENESIS request parameters with a rule beyond "non-blank", and that rule. */
+const RULES: Readonly<Record<string, Problem<unknown>>> = {
+  pagelength: intRangeProblem(1, MAX_PAGELENGTH),
+  timeslices: intRangeProblem(0, Number.MAX_SAFE_INTEGER),
   language: oneOfProblem(LANGUAGES),
   category: oneOfProblem(FIND_CATEGORIES),
   searchcriterion: oneOfProblem(CRITERIA),
@@ -54,15 +71,15 @@ const CHOICES: Readonly<Record<string, Problem<unknown>>> = {
 /**
  * Check the parameters of one GENESIS request before it is sent. `undefined`
  * and `null` mean "omitted" and are never sent. An enumerated parameter must be
- * one of its allowed values; every other string that is given must be
- * non-blank. Throws `DestatisValidationError` naming the parameter.
+ * one of its allowed values, `pagelength`/`timeslices` an integer in range;
+ * every other string that is given must be non-blank. Throws `DestatisValidationError` naming the parameter.
  */
 export function assertRequestParams(params: Readonly<Record<string, unknown>>): void {
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) continue;
     // An own-property lookup, so a key such as "constructor" is never a rule.
-    const choice = Object.prototype.hasOwnProperty.call(CHOICES, key) ? CHOICES[key] : undefined;
-    if (choice !== undefined) assertValid(key, value, choice);
+    const rule = Object.prototype.hasOwnProperty.call(RULES, key) ? RULES[key] : undefined;
+    if (rule !== undefined) assertValid(key, value, rule);
     else if (typeof value === "string") assertValid(key, value, nonBlankProblem);
   }
 }

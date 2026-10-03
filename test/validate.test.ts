@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertRequestParams, assertValid, nonBlankProblem, oneOfProblem, type Problem } from "../src/client/validate.js";
+import { assertRequestParams, assertValid, intRangeProblem, nonBlankProblem, oneOfProblem, type Problem } from "../src/client/validate.js";
 import {
   DestatisError,
   DestatisUsageError,
@@ -118,4 +118,21 @@ test("assertRequestParams checks the enumerated GENESIS parameters against their
   assert.throws(() => assertRequestParams({ category: "Tables" }), DestatisValidationError);
   assert.throws(() => assertRequestParams({ searchcriterion: "code" }), DestatisValidationError);
   assert.throws(() => assertRequestParams({ sortcriterion: "" }), /Invalid sortcriterion: Allowed choices are Code, Content\./);
+});
+
+test("intRangeProblem accepts safe integers in range and words its reasons like the CLI", () => {
+  const problem = intRangeProblem(1, 25000);
+  assert.equal(problem(1), undefined);
+  assert.equal(problem(25000), undefined);
+  assert.equal(problem(0), "Must be >= 1.");
+  assert.equal(problem(25001), "Must be <= 25000.");
+  for (const v of [-1, 1.5, NaN, Infinity, 1e20, "10", undefined]) {
+    assert.equal(problem(v), "Expected a non-negative integer.", String(v));
+  }
+});
+
+test("assertRequestParams checks pagelength and timeslices", () => {
+  assert.doesNotThrow(() => assertRequestParams({ pagelength: 25000, timeslices: 0 }));
+  assert.throws(() => assertRequestParams({ pagelength: 0 }), /^DestatisValidationError: Invalid pagelength: Must be >= 1\.$/);
+  assert.throws(() => assertRequestParams({ timeslices: -1 }), /Invalid timeslices: Expected a non-negative integer\./);
 });

@@ -4,7 +4,11 @@
 // (see validate.ts): a blank string (empty or whitespace only) is rejected with
 // DestatisValidationError, since GENESIS reads an empty parameter as "no
 // filter". The enumerated parameters (language, category, the criteria, format) must be
-// one of the values exported below. Valid values are sent as-is, never trimmed.
+// one of the values exported below; pagelength is an integer from 1 to
+// MAX_PAGELENGTH and timeslices a non-negative integer. Valid values are sent as-is, never trimmed.
+
+/** Most results a list request may ask for (`pagelength`, the server's maximum). */
+export const MAX_PAGELENGTH = 25000;
 
 /** Response languages GENESIS offers (`language`). */
 export const LANGUAGES = ["de", "en"] as const;
@@ -25,7 +29,7 @@ export type Criterion = (typeof CRITERIA)[number];
 export interface FindParams {
   term: string;
   category?: FindCategory;
-  /** Max results (default 100, server max 25000). */
+  /** Max results: an integer from 1 to `MAX_PAGELENGTH` (server default 100). */
   pagelength?: number;
   language?: Language;
 }
@@ -40,7 +44,7 @@ export interface CatalogueParams {
   searchcriterion?: Criterion;
   sortcriterion?: Criterion;
   type?: string;
-  /** Max results (default 100, server max 25000). */
+  /** Max results: an integer from 1 to `MAX_PAGELENGTH` (server default 100). */
   pagelength?: number;
   language?: Language;
 }
@@ -65,6 +69,7 @@ export interface DataTableParams {
   contents?: string;
   startyear?: string;
   endyear?: string;
+  /** Number of time slices from the end: a non-negative integer. */
   timeslices?: number;
   regionalvariable?: string;
   regionalkey?: string;

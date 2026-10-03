@@ -12,7 +12,7 @@ import {
   type DataFileParams,
   type DataTableParams,
 } from "../../client/params.js";
-import { action, parseIntArg, parseNonEmpty, renderJson, renderRaw } from "../shared.js";
+import { action, parseBoundedInt, parseNonEmpty, renderJson, renderRaw } from "../shared.js";
 import type { GlobalOptions } from "../shared.js";
 
 type JsonFn = (c: DestatisClient, name: string, p: DataTableParams) => Promise<unknown>;
@@ -38,7 +38,11 @@ function addDataOptions(cmd: Command): Command {
     .option("--area <area>", "data area", parseNonEmpty)
     .option("--start-year <year>", "earliest year (YYYY)", parseNonEmpty)
     .option("--end-year <year>", "latest year (YYYY)", parseNonEmpty)
-    .option("--timeslices <n>", "number of time slices from the end", parseIntArg)
+    .option(
+      "--timeslices <n>",
+      "number of time slices from the end",
+      parseBoundedInt(0, Number.MAX_SAFE_INTEGER),
+    )
     .option("--region-var <code>", "regional variable code", parseNonEmpty)
     .option("--region-key <key>", "regional key (e.g. a Land/Kreis code, `*` wildcard ok)", parseNonEmpty)
     .option("--contents <labels>", "restrict to these value labels (comma-separated)", parseNonEmpty)
