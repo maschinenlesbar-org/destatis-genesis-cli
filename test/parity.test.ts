@@ -289,3 +289,41 @@ test("parity #8: the CLI's --format choices are the library's DATA_FILE_FORMATS"
     assert.deepEqual(cmd.options.find((o) => o.long === "--format")?.argChoices, [...DATA_FILE_FORMATS]);
   }
 });
+
+// ---- Finding 9 (PAT-15): no CLI-only request defaults --------------------------------
+
+const defaultCases: Array<{ label: string; argv: string[]; lib: (t: Transport) => Promise<unknown>; zip?: boolean }> = [
+  { label: "find Bev", argv: ["find", "Bev"], lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev" }) },
+  { label: "logincheck", argv: [...TOKEN, "logincheck"], lib: (t) => client(t).logincheck() },
+  { label: "catalogue tables 124*", argv: [...TOKEN, "catalogue", "tables", "124*"], lib: (t) => client(t).catalogue.tables({ selection: "124*" }) },
+  { label: "catalogue modified", argv: [...TOKEN, "catalogue", "modified"], lib: (t) => client(t).catalogue.modifiedData() },
+  { label: "metadata table 12411-0001", argv: [...TOKEN, "metadata", "table", "12411-0001"], lib: (t) => client(t).metadata.table("12411-0001") },
+  { label: "data table 12411-0001", argv: [...TOKEN, "data", "table", "12411-0001"], lib: (t) => client(t).data.table("12411-0001") },
+  {
+    label: "data cubefile 12411BJ001",
+    argv: [...TOKEN, "-o", "out.zip", "data", "cubefile", "12411BJ001"],
+    lib: (t) => client(t).data.cubeFile("12411BJ001"),
+    zip: true,
+  },
+];
+
+for (const dc of defaultCases) {
+  test(`parity #9: ${dc.label} with no --language/--category sends the identical request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...dc.argv],
+      lib: dc.lib,
+      responder: dc.zip ? ZIP : () => jsonResponse(fx.findResult),
+    });
+    assertSameRequest(p);
+    const body = new URLSearchParams(p.cli.requests[0]!.body?.toString() ?? "");
+    assert.equal(body.has("language"), false);
+    assert.equal(body.has("category"), false);
+  });
+}
+
+test("parity #9: --help names the server defaults for --language and --category", async () => {
+  const p = await parity({ argv: ["--help"], lib: async () => undefined });
+  assert.match(p.cli.out, /--language <lang>\s+response language \(server default: de\)/);
+  const f = await parity({ argv: ["find", "--help"], lib: async () => undefined });
+  assert.match(f.cli.out, /server default: all/);
+});

@@ -68,6 +68,11 @@ What the library rejects:
   case-sensitive. The lists are exported from `params.ts` and the types derive from
   them; the CLI builds its `.choices()` from the same exports.
 
+Request defaults: neither side fills in a value the caller did not give. The CLI
+has no `.default()` for `--language` or `find --category`, so an omitted value is
+not sent — by the CLI or the library — and GENESIS applies its own defaults
+(`de`, `all`); the help text says so.
+
 ## GENESIS-specific divergences
 
 The GENESIS API differs from most sibling repos in four ways an editor must

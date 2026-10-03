@@ -95,7 +95,9 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseCredential)
     .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseCredential)
     .addOption(
-      new Option("--language <lang>", "response language").choices([...LANGUAGES]).default("de"),
+      // No .default(): an omitted --language is not sent, exactly like the library,
+      // and GENESIS answers in German.
+      new Option("--language <lang>", "response language (server default: de)").choices([...LANGUAGES]),
     )
     .option(
       "--pagelength <n>",
