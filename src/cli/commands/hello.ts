@@ -9,13 +9,9 @@ export function registerHelloCommands(program: Command, deps: CliDeps): void {
     .command("hello")
     .description("Connectivity check (helloworld/whoami) — needs no credentials")
     .action(
-      action(
-        deps,
-        async ({ client, global }) => {
-          renderJson(deps, global, await client.whoami());
-        },
-        { auth: false },
-      ),
+      action(deps, async ({ client, global }) => {
+        renderJson(deps, global, await client.whoami());
+      }),
     );
 
   program

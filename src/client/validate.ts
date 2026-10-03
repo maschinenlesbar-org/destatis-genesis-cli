@@ -168,3 +168,16 @@ export const CREDENTIAL_PAIR_PROBLEM = "Provide both username and password (or a
 export function credentialPairProblem(creds: { username?: string; password?: string }): string | undefined {
   return (creds.username === undefined) === (creds.password === undefined) ? undefined : CREDENTIAL_PAIR_PROBLEM;
 }
+
+/** `credentialsRequiredProblem`'s reason when an account-only endpoint has no credentials. */
+export const CREDENTIALS_REQUIRED_PROBLEM = "This endpoint needs an account (a token, or a username and password).";
+
+/**
+ * GENESIS serves `catalogue`, `metadata`, `data` and `logincheck` only to an
+ * account; anonymously it answers 401 + Code 15. A token travels in the
+ * `username` field, so a set `username` (after blank-to-unset) means "has
+ * credentials".
+ */
+export function credentialsRequiredProblem(creds: { username?: string | undefined; password?: string | undefined }): string | undefined {
+  return creds.username === undefined ? CREDENTIALS_REQUIRED_PROBLEM : undefined;
+}

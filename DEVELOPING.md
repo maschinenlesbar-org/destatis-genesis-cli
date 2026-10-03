@@ -96,6 +96,13 @@ What the library rejects:
   username used to go out in the token's wire format, a lone password was dropped.
   The CLI's `resolveCredentials` keeps only the flag > env precedence; `action()`
   builds the client first and rewords this error with the flags and env vars.
+- **No credentials for an account-only endpoint** (`credentialsRequiredProblem`):
+  `catalogue.*`, `metadata.*`, `data.*` and `logincheck()` reject before any
+  request when the client has no credentials (a blank one counts as none) —
+  `Invalid credentials: This endpoint needs an account (a token, or a username and
+  password).` Anonymously GENESIS would answer 401 + Code 15 after the round trip.
+  `whoami()` and `find()` keep their optional credentials. The CLI has no guard of
+  its own: `action()` rewords this error with the flags, env vars and signup URL.
 
 Request defaults: neither side fills in a value the caller did not give. The CLI
 has no `.default()` for `--language` or `find --category`, so an omitted value is
@@ -122,7 +129,8 @@ authenticated call is a **`POST`** with:
 Only `helloworld/whoami` is an unauthenticated **`GET`**. `find/find` is a POST
 that GENESIS also serves without credentials, as its guest user `GAST` (checked
 live 2026-09-26; `catalogue`/`metadata`/`data` answer 401 + Code 15 then), so the
-CLI's `find` does not demand credentials (`action(..., { auth: false })`). The client
+client's `find()` does not demand credentials while the account-only groups do
+(`requireAuth()` in `client.ts`, see above). The client
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; values checked by the library's

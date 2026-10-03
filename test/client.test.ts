@@ -112,9 +112,26 @@ test("a credential with surrounding whitespace is rejected, never trimmed or sen
 });
 
 test("a blank token is treated as unset (no credential header)", async () => {
-  const { c, mt } = client(() => jsonResponse(fx.tablesList), { token: "   " });
-  await c.catalogue.tables({});
+  const { c, mt } = client(() => jsonResponse(fx.findResult), { token: "   " });
+  await c.find({ term: "Bev" });
   assert.equal(mt.last().headers?.["username"], undefined);
+});
+
+test("account-only endpoints reject without credentials, before any request", async () => {
+  const { c, mt } = client(() => jsonResponse(fx.tablesList), { token: "   " });
+  const calls: Array<() => Promise<unknown>> = [
+    () => c.logincheck(),
+    () => c.catalogue.tables(),
+    () => c.metadata.statistic("12411"),
+    () => c.data.timeseries("12411BJ001"),
+    () => c.data.resultFile("R1"),
+  ];
+  for (const call of calls) {
+    await assert.rejects(call(), (err) =>
+      err instanceof DestatisValidationError && /^Invalid credentials: This endpoint needs an account/.test(err.message),
+    );
+  }
+  assert.equal(mt.calls.length, 0);
 });
 
 test("a client with a custom transport rejects a non-http(s) base URL before sending credentials", () => {

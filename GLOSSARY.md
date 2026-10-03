@@ -77,6 +77,10 @@ meaningful statement possible), `()` (limited informative value), `p`
 - **Username / password** — the account login (username ~10 chars, may be an
   email; password 10–50 chars). Required together: one without the other is
   refused before any request, by the CLI and the library alike.
+- **Account-only endpoints** — `catalogue`, `metadata`, `data` and `logincheck`
+  need credentials; without them GENESIS answers 401 + Code `15`, so the CLI and
+  the library refuse the call before any request. `hello` (`whoami`) and `find`
+  work without credentials (`find` as the guest user `GAST`).
 
 See [DEVELOPING.md](DEVELOPING.md) for how credentials are passed on the wire and
 why redirects are not followed.

@@ -587,3 +587,87 @@ test("parity #3 control: a username/password pair sends the identical request", 
   });
   assertSameRequest(p);
 });
+
+// ---- Finding 6 (PAT-7): account-only endpoints need credentials ------------------------
+
+const NEEDS_CLI =
+  /^Error: This command needs credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
+const NEEDS_LIB = /^Invalid credentials: This endpoint needs an account \(a token, or a username and password\)\.$/;
+
+const needsCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [
+  { label: "logincheck", argv: ["logincheck"], lib: (t) => new DestatisClient({ transport: t }).logincheck() },
+  { label: "catalogue jobs", argv: ["catalogue", "jobs"], lib: (t) => new DestatisClient({ transport: t }).catalogue.jobs() },
+  {
+    label: "metadata table 12411-0001",
+    argv: ["metadata", "table", "12411-0001"],
+    lib: (t) => new DestatisClient({ transport: t }).metadata.table("12411-0001"),
+  },
+  {
+    label: "data table 12411-0001",
+    argv: ["data", "table", "12411-0001"],
+    lib: (t) => new DestatisClient({ transport: t }).data.table("12411-0001"),
+  },
+  {
+    label: "data cubefile 12411BJ001",
+    argv: ["data", "cubefile", "12411BJ001"],
+    lib: (t) => new DestatisClient({ transport: t }).data.cubeFile("12411BJ001"),
+  },
+  {
+    label: "DESTATIS_API_TOKEN='  ' catalogue tables",
+    argv: ["catalogue", "tables"],
+    env: { DESTATIS_API_TOKEN: "  " },
+    lib: (t) => new DestatisClient({ transport: t, token: "  " }).catalogue.tables(),
+  },
+];
+
+for (const nc of needsCases) {
+  test(`parity #6: ${nc.label} without credentials is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...nc.argv],
+      ...(nc.env ? { env: nc.env } : {}),
+      lib: nc.lib,
+      responder: () => jsonResponse(fx.tablesList),
+    });
+    assertBothReject(p, NEEDS_LIB);
+    assert.match(p.cli.err, NEEDS_CLI);
+  });
+}
+
+test("parity #6 (and #11 part 3): --token '' catalogue tables is rejected by both, with no request", async () => {
+  const p = await parity({
+    argv: ["--compact", "--token", "", "catalogue", "tables"],
+    lib: (t) => new DestatisClient({ transport: t, token: "" }).catalogue.tables(),
+  });
+  assertBothReject(p, NEEDS_LIB);
+});
+
+test("parity #6: a library method rejects instead of throwing synchronously", () => {
+  const c = new DestatisClient({ transport: async () => jsonResponse({}) });
+  let promise: Promise<unknown> | undefined;
+  assert.doesNotThrow(() => {
+    promise = c.catalogue.tables();
+  });
+  return assert.rejects(promise!, DestatisValidationError);
+});
+
+for (const [label, argv, lib] of [
+  ["hello", ["hello"], (t: Transport) => new DestatisClient({ transport: t }).whoami()],
+  ["find Bev", ["find", "Bev"], (t: Transport) => new DestatisClient({ transport: t }).find({ term: "Bev" })],
+] as const) {
+  test(`parity #6 control: ${label} still works without credentials on both sides`, async () => {
+    const p = await parity({ argv: ["--compact", ...argv], lib, responder: () => jsonResponse(fx.findResult) });
+    assert.equal(p.cli.code, 0, p.cli.err);
+    assert.ok(p.lib.ok);
+    assert.deepEqual(p.cli.requests.map(requestKey), p.lib.requests.map(requestKey));
+    assert.equal(p.lib.requests.length, 1);
+  });
+}
+
+test("parity #6 control: catalogue jobs with a token sends the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", ...TOKEN, "catalogue", "jobs"],
+    lib: (t) => client(t).catalogue.jobs(),
+    responder: () => jsonResponse(fx.tablesList),
+  });
+  assertSameRequest(p);
+});

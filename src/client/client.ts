@@ -9,8 +9,9 @@
 // them via the options below (CLI: --token / --username+--password, or the
 // DESTATIS_API_TOKEN / DESTATIS_USERNAME / DESTATIS_PASSWORD env vars).
 // `whoami()` needs no credentials, and `find()` works without them too (GENESIS
-// answers an anonymous call as the guest user "GAST"); catalogue, metadata and
-// data need an account.
+// answers an anonymous call as the guest user "GAST"); catalogue, metadata, data
+// and `logincheck()` need an account, and reject with `DestatisValidationError`
+// before any request when the client has no credentials.
 //
 //   const c = new DestatisClient({ token: process.env.DESTATIS_API_TOKEN });
 //   await c.find({ term: "Bevölkerung" });
@@ -23,6 +24,7 @@ import {
   assertValid,
   credentialPairProblem,
   credentialProblem,
+  credentialsRequiredProblem,
   nonBlankProblem,
 } from "./validate.js";
 import type {
@@ -242,13 +244,24 @@ export class DestatisClient {
     }
     this.engine = new RequestEngine(engineOptions);
 
-    const auth: AuthHeaders = () => this.authHeaders();
+    // catalogue, metadata and data are account-only endpoints.
+    const auth: AuthHeaders = () => this.requireAuth();
     this.catalogue = new CatalogueGroup(this.engine, auth);
     this.metadata = new MetadataGroup(this.engine, auth);
     this.data = new DataGroup(this.engine, auth);
   }
 
-  /** The credential headers merged into every authenticated request. */
+  /**
+   * The credential headers for an account-only endpoint. Without credentials
+   * GENESIS would answer 401 + Code 15 after the round trip, so this throws
+   * `DestatisValidationError` (`Invalid credentials: …`) before any request.
+   */
+  private requireAuth(): Record<string, string> {
+    assertValid("credentials", { username: this.username }, credentialsRequiredProblem);
+    return this.authHeaders();
+  }
+
+  /** The credential headers merged into every request that takes them (none when unset). */
   private authHeaders(): Record<string, string> {
     if (!this.username) return {};
     return this.password
@@ -261,9 +274,12 @@ export class DestatisClient {
     return this.engine.getJson(`${API}/helloworld/whoami`);
   }
 
-  /** `helloworld/logincheck` — validate the supplied credentials. */
+  /**
+   * `helloworld/logincheck` — validate the supplied credentials. Rejects with
+   * `DestatisValidationError` when the client has none (there is nothing to check).
+   */
   logincheck(language?: Language): Promise<LoginCheckResponse> {
-    return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.authHeaders());
+    return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.requireAuth());
   }
 
   /** `find/find` — full-text search across object types. `term` must be non-blank. */

@@ -20,24 +20,20 @@ export function registerFindCommand(program: Command, deps: CliDeps): void {
         ...FIND_CATEGORIES,
       ]),
     )
+    // GENESIS serves find/find to anonymous callers as the guest user "GAST"
+    // (verified live 2026-09-26), so the library sends credentials when
+    // configured and does not demand them when absent.
     .action(
-      action(
-        deps,
-        async ({ client, global, opts }, [term]) => {
-          renderJson(
-            deps,
-            global,
-            await client.find({
-              term: term!,
-              ...(opts["category"] !== undefined ? { category: opts["category"] as FindCategory } : {}),
-              ...commonListParams(global),
-            }),
-          );
-        },
-        // GENESIS serves find/find to anonymous callers as the guest user "GAST"
-        // (verified live 2026-09-26), so credentials are optional here: sent when
-        // configured, not demanded when absent.
-        { auth: false },
-      ),
+      action(deps, async ({ client, global, opts }, [term]) => {
+        renderJson(
+          deps,
+          global,
+          await client.find({
+            term: term!,
+            ...(opts["category"] !== undefined ? { category: opts["category"] as FindCategory } : {}),
+            ...commonListParams(global),
+          }),
+        );
+      }),
     );
 }

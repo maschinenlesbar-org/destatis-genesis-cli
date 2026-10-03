@@ -78,6 +78,10 @@ sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufi
 - **Benutzername / Passwort** – die Anmeldedaten des Kontos (Benutzername etwa 10 Zeichen,
   kann eine E-Mail-Adresse sein; Passwort 10–50 Zeichen). Nur gemeinsam anzugeben:
   Eines ohne das andere weisen CLI und Bibliothek gleichermaßen vor jeder Anfrage zurück.
+- **Nur mit Konto** – `catalogue`, `metadata`, `data` und `logincheck` brauchen Zugangsdaten;
+  ohne sie antwortet GENESIS mit 401 und Code `15`, deshalb lehnen CLI und Bibliothek den
+  Aufruf schon vor jeder Anfrage ab. `hello` (`whoami`) und `find` funktionieren ohne
+  Zugangsdaten (`find` als Gastnutzer `GAST`).
 
 Wie Zugangsdaten übertragen werden und warum Weiterleitungen nicht gefolgt wird, beschreibt
 [DEVELOPING.md](DEVELOPING.md) (englisch).

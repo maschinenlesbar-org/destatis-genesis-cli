@@ -13,6 +13,7 @@ import {
   baseUrlProblem,
   CREDENTIAL_PAIR_PROBLEM,
   credentialProblem,
+  CREDENTIALS_REQUIRED_PROBLEM,
   headerValueProblem,
   intRangeProblem,
   nonBlankProblem,
@@ -139,8 +140,8 @@ export interface CredentialSources {
  * authenticate as someone else. (An explicit `--token` flag still wins.)
  * Precedence only: a lone username or password is passed on as is, and the
  * library's pair rule rejects it when the client is built (see {@link action}).
- * No credentials at all is allowed here — commands that need auth enforce
- * presence via {@link action}'s `auth` guard.
+ * No credentials at all is allowed here — the library rejects an account-only
+ * call without them, and {@link action} rewords that error.
  */
 export function resolveCredentials(
   global: GlobalOptions,
@@ -339,18 +340,38 @@ function warnArgvCredentials(deps: CliDeps, command: Command): void {
 }
 
 /**
- * Wrap an async command action with credential resolution, an optional auth
- * guard, and client construction. The callback receives a context (client +
- * resolved global options + this command's options) and the positional args.
+ * Run a command body, rewording the library's "this endpoint needs an account"
+ * error with the flags and env vars that supply credentials, and the signup URL.
+ */
+async function withCredentialsHint(body: () => Promise<void>): Promise<void> {
+  try {
+    await body();
+  } catch (err) {
+    if (err instanceof DestatisValidationError && err.message.endsWith(CREDENTIALS_REQUIRED_PROBLEM)) {
+      throw new DestatisUsageError(
+        "This command needs credentials. Set --token (env DESTATIS_API_TOKEN) " +
+          "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
+          "A free account is available at https://www-genesis.destatis.de.",
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * Wrap an async command action with credential resolution and client
+ * construction. The callback receives a context (client + resolved global
+ * options + this command's options) and the positional args. Which commands need
+ * credentials is the library's rule: an account-only call rejects before any
+ * request, and the error is reworded here with the flags and env vars.
  *
  * Commander invokes actions as (arg1, ..., argN, options, command); we slice off
  * the trailing options object and command instance to recover the positionals.
- * Pass `{ auth: false }` for commands that do not need credentials (e.g. `hello`).
  */
 export function action(
   deps: CliDeps,
   fn: (ctx: ActionContext, positionals: string[]) => Promise<void>,
-  opts: { auth?: boolean } = {},
 ): (...args: unknown[]) => Promise<void> {
   return async (...args: unknown[]) => {
     const command = args[args.length - 1] as Command;
@@ -362,18 +383,10 @@ export function action(
       username: root.getOptionValueSource("username") === "cli",
       password: root.getOptionValueSource("password") === "cli",
     });
-    // Built first, so a half username/password pair gets the library's pair
-    // error (reworded with the flags) rather than "needs credentials".
+    // A half username/password pair gets the library's pair error, reworded.
     const client = createClient(deps, toClientOptions(global, creds));
-    if (opts.auth !== false && !creds.present) {
-      throw new DestatisUsageError(
-        "This command needs credentials. Set --token (env DESTATIS_API_TOKEN) " +
-          "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
-          "A free account is available at https://www-genesis.destatis.de.",
-      );
-    }
     if (creds.present) warnArgvCredentials(deps, command);
-    await fn({ client, global, opts: command.opts() }, positionals);
+    await withCredentialsHint(() => fn({ client, global, opts: command.opts() }, positionals));
   };
 }
 
