@@ -72,6 +72,17 @@ What the library rejects:
   non-negative integer — `0`, `-1`, `1.5`, `NaN`, `Infinity` and `25001` never reach
   the server. The CLI's `parseBoundedInt` parses the string and applies the same
   rule; `--pagelength` takes its bound from `MAX_PAGELENGTH`.
+- **Header values** (`headerValueProblem`, `credentialProblem`, `headerNameProblem`):
+  `userAgent` and every `defaultHeaders` value must be non-blank, free of control
+  characters (CR/LF included, tab allowed) and within Latin-1; a `defaultHeaders`
+  name must be an HTTP token. Only `userAgent: undefined` selects the default. A
+  `token`/`username`/`password` must also have no leading or trailing whitespace.
+  A *blank* credential still counts as unset in the library (so
+  `token: process.env.DESTATIS_API_TOKEN` works with an empty variable), and so
+  does a blank credential env var in the CLI; only a blank credential *flag* is a
+  CLI usage error, because it would silently cancel an env credential. Messages
+  never echo the value. The CLI's `parseHeaderValue`/`parseCredential` (and the
+  env-var check in `program.ts`) call the same rules.
 
 Request defaults: neither side fills in a value the caller did not give. The CLI
 has no `.default()` for `--language` or `find --category`, so an omitted value is
@@ -101,8 +112,8 @@ live 2026-09-26; `catalogue`/`metadata`/`data` answer 401 + Code 15 then), so th
 CLI's `find` does not demand credentials (`action(..., { auth: false })`). The client
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
-`DESTATIS_API_TOKEN`, etc., in `program.ts`; validated in
-`shared.ts:resolveCredentials`). A token wins over username/password, except that
+`DESTATIS_API_TOKEN`, etc., in `program.ts`; values checked by the library's
+`credentialProblem`, precedence in `shared.ts:resolveCredentials`). A token wins over username/password, except that
 a `--username`/`--password` *flag* beats an env-only token (commander's value
 source tells flag from env); supplying only one of username/password is a
 `DestatisUsageError` (exit 2).

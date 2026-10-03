@@ -13,6 +13,7 @@
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
 import { DestatisApiError, DestatisError, DestatisNetworkError, DestatisParseError } from "./errors.js";
+import { assertValid, headerNameProblem, headerValueProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
@@ -302,8 +303,18 @@ export class RequestEngine {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     assertHttpScheme(this.baseUrl);
     this.transport = options.transport ?? nodeHttpTransport;
-    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
-    this.defaultHeaders = options.defaultHeaders ?? {};
+    // Only `undefined` selects the default; a given value must be a valid header
+    // value (a blank one is rejected, not silently replaced).
+    this.userAgent =
+      options.userAgent === undefined
+        ? DEFAULT_USER_AGENT
+        : assertValid("userAgent", options.userAgent, headerValueProblem);
+    const defaultHeaders = options.defaultHeaders ?? {};
+    for (const [name, value] of Object.entries(defaultHeaders)) {
+      assertValid("defaultHeaders name", name, headerNameProblem);
+      assertValid(`defaultHeaders["${name}"]`, value, headerValueProblem);
+    }
+    this.defaultHeaders = defaultHeaders;
     this.timeoutMs = intOption("timeoutMs", options.timeoutMs, 30_000, MAX_TIMEOUT_MS);
     this.maxRetries = intOption("maxRetries", options.maxRetries, 2, MAX_RETRIES);
     this.retryDelayMs = intOption("retryDelayMs", options.retryDelayMs, 200, MAX_RETRY_AFTER_MS);

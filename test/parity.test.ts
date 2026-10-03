@@ -370,3 +370,105 @@ test("parity #2 control: --pagelength 25000 and --timeslices 0 send the identica
   });
   assertSameRequest(d);
 });
+
+// ---- Finding 4 (PAT-5/PAT-6): header values for credentials and the User-Agent --------
+
+const headerCases: Array<{
+  label: string;
+  argv: string[];
+  env?: Record<string, string>;
+  lib: (t: Transport) => Promise<unknown>;
+  msg: RegExp;
+}> = [
+  {
+    label: "--token ' tok ' find Bev",
+    argv: ["--token", " tok ", "find", "Bev"],
+    lib: (t) => new DestatisClient({ transport: t, token: " tok " }).find({ term: "Bev" }),
+    msg: /^Invalid token: Value has leading or trailing whitespace, which an HTTP header cannot carry\.$/,
+  },
+  {
+    label: "DESTATIS_API_TOKEN with CR/LF, find Bev",
+    argv: ["find", "Bev"],
+    env: { DESTATIS_API_TOKEN: "test\r\nX: y" },
+    lib: (t) => new DestatisClient({ transport: t, token: "test\r\nX: y" }).find({ term: "Bev" }),
+    msg: /^Invalid token: Value contains control characters\.$/,
+  },
+  {
+    label: "--token 't€' find Bev",
+    argv: ["--token", "t€", "find", "Bev"],
+    lib: (t) => new DestatisClient({ transport: t, token: "t€" }).find({ term: "Bev" }),
+    msg: /^Invalid token: Value contains characters outside Latin-1 \(above U\+00FF\)\.$/,
+  },
+  {
+    label: "--username user --password ' pass ' logincheck",
+    argv: ["--username", "user", "--password", " pass ", "logincheck"],
+    lib: (t) => new DestatisClient({ transport: t, username: "user", password: " pass " }).logincheck(),
+    msg: /^Invalid password: Value has leading or trailing whitespace/,
+  },
+  {
+    label: "--username 'u\\x00' --password pass logincheck",
+    argv: ["--username", "u\x00", "--password", "pass", "logincheck"],
+    lib: (t) => new DestatisClient({ transport: t, username: "u\x00", password: "pass" }).logincheck(),
+    msg: /^Invalid username: Value contains control characters\.$/,
+  },
+  {
+    label: "--user-agent '' hello",
+    argv: ["--user-agent", "", "hello"],
+    lib: (t) => new DestatisClient({ transport: t, userAgent: "" }).whoami(),
+    msg: /^Invalid userAgent: Expected a non-empty value\.$/,
+  },
+  {
+    label: "--user-agent with CR/LF, hello",
+    argv: ["--user-agent", "a\r\nX-Evil: 1", "hello"],
+    lib: (t) => new DestatisClient({ transport: t, userAgent: "a\r\nX-Evil: 1" }).whoami(),
+    msg: /^Invalid userAgent: Value contains control characters\.$/,
+  },
+  {
+    label: "--user-agent with DEL, hello",
+    argv: ["--user-agent", "a\x7fb", "hello"],
+    lib: (t) => new DestatisClient({ transport: t, userAgent: "a\x7fb" }).whoami(),
+    msg: /^Invalid userAgent: Value contains control characters\.$/,
+  },
+  {
+    label: "--user-agent '€' hello",
+    argv: ["--user-agent", "€", "hello"],
+    lib: (t) => new DestatisClient({ transport: t, userAgent: "€" }).whoami(),
+    msg: /^Invalid userAgent: Value contains characters outside Latin-1/,
+  },
+];
+
+for (const hc of headerCases) {
+  test(`parity #4: ${hc.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...hc.argv],
+      ...(hc.env ? { env: hc.env } : {}),
+      lib: hc.lib,
+      responder: () => jsonResponse(fx.findResult),
+    });
+    assertBothReject(p, hc.msg);
+  });
+}
+
+for (const ua of ["é", "a\tb", " ua "]) {
+  test(`parity #4 control: --user-agent ${JSON.stringify(ua)} is sent by both`, async () => {
+    const p = await parity({
+      argv: ["--compact", "--user-agent", ua, "hello"],
+      lib: (t) => new DestatisClient({ transport: t, userAgent: ua }).whoami(),
+      responder: () => jsonResponse(fx.whoami),
+    });
+    assert.equal(p.cli.code, 0, p.cli.err);
+    assert.ok(p.lib.ok);
+    assert.equal(p.cli.requests[0]!.headers?.["User-Agent"], ua);
+    assert.equal(p.lib.requests[0]!.headers?.["User-Agent"], ua);
+  });
+}
+
+test("parity #4: the library still treats a blank credential as unset (the env path does too)", async () => {
+  const p = await parity({
+    argv: ["--compact", "find", "Bev"],
+    env: { DESTATIS_API_TOKEN: "   " },
+    lib: (t) => new DestatisClient({ transport: t, token: "   " }).find({ term: "Bev" }),
+    responder: () => jsonResponse(fx.findResult),
+  });
+  assertSameRequest(p);
+});
