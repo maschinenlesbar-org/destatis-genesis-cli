@@ -517,3 +517,73 @@ test("parity #5 control: a base URL with a path prefix sends the identical reque
   assert.equal(p.cli.requests[0]!.url, "https://h.example/prefix/genesisWS/rest/2020/helloworld/whoami");
   assert.equal(p.lib.requests[0]!.url, p.cli.requests[0]!.url);
 });
+
+// ---- Finding 3 (PAT-7): username and password come as a pair --------------------------
+
+const PAIR_CLI = /^Error: Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m;
+const PAIR_LIB = /^Invalid credentials: Provide both username and password \(or a token\)\.$/;
+
+const pairCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [
+  {
+    label: "--username user find Bev",
+    argv: ["--username", "user", "find", "Bev"],
+    lib: (t) => new DestatisClient({ transport: t, username: "user" }).find({ term: "Bev" }),
+  },
+  {
+    label: "--password pass find Bev",
+    argv: ["--password", "pass", "find", "Bev"],
+    lib: (t) => new DestatisClient({ transport: t, password: "pass" }).find({ term: "Bev" }),
+  },
+  {
+    label: "DESTATIS_USERNAME=user logincheck",
+    argv: ["logincheck"],
+    env: { DESTATIS_USERNAME: "user" },
+    lib: (t) => new DestatisClient({ transport: t, username: "user" }).logincheck(),
+  },
+  {
+    label: "DESTATIS_PASSWORD=pass logincheck",
+    argv: ["logincheck"],
+    env: { DESTATIS_PASSWORD: "pass" },
+    lib: (t) => new DestatisClient({ transport: t, password: "pass" }).logincheck(),
+  },
+  {
+    label: "--username user with a blank DESTATIS_PASSWORD, metadata table",
+    argv: ["--username", "user", "metadata", "table", "12411-0001"],
+    env: { DESTATIS_PASSWORD: "" },
+    lib: (t) => new DestatisClient({ transport: t, username: "user", password: "" }).metadata.table("12411-0001"),
+  },
+];
+
+for (const pc of pairCases) {
+  test(`parity #3: ${pc.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...pc.argv],
+      ...(pc.env ? { env: pc.env } : {}),
+      lib: pc.lib,
+      responder: () => jsonResponse(fx.findResult),
+    });
+    assertBothReject(p, PAIR_LIB);
+    assert.match(p.cli.err, PAIR_CLI);
+  });
+}
+
+test("parity #3: a lone username or password next to a token is not an error (the token wins)", async () => {
+  const p = await parity({
+    argv: ["--compact", "--token", TOKEN_VALUE, "find", "Bev"],
+    env: { DESTATIS_USERNAME: "user" },
+    lib: (t) => new DestatisClient({ transport: t, token: TOKEN_VALUE, username: "user" }).find({ term: "Bev" }),
+    responder: () => jsonResponse(fx.findResult),
+  });
+  assertSameRequest(p);
+  assert.equal(p.lib.requests[0]!.headers?.["username"], TOKEN_VALUE);
+});
+
+test("parity #3 control: a username/password pair sends the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", "logincheck"],
+    env: { DESTATIS_USERNAME: "user", DESTATIS_PASSWORD: "pass" },
+    lib: (t) => new DestatisClient({ transport: t, username: "user", password: "pass" }).logincheck(),
+    responder: () => jsonResponse(fx.loginOk),
+  });
+  assertSameRequest(p);
+});

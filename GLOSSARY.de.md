@@ -76,7 +76,8 @@ sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufi
   („Webservice/API“) erzeugen. Es wird ohne Passwort im Anfragefeld `username` übertragen.
   Wenn Sie ein neues Token erzeugen, wird das alte ungültig.
 - **Benutzername / Passwort** – die Anmeldedaten des Kontos (Benutzername etwa 10 Zeichen,
-  kann eine E-Mail-Adresse sein; Passwort 10–50 Zeichen). Nur gemeinsam anzugeben.
+  kann eine E-Mail-Adresse sein; Passwort 10–50 Zeichen). Nur gemeinsam anzugeben:
+  Eines ohne das andere weisen CLI und Bibliothek gleichermaßen vor jeder Anfrage zurück.
 
 Wie Zugangsdaten übertragen werden und warum Weiterleitungen nicht gefolgt wird, beschreibt
 [DEVELOPING.md](DEVELOPING.md) (englisch).

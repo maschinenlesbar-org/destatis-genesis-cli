@@ -18,7 +18,13 @@
 
 import { RequestEngine, type EngineOptions, type RawResponse } from "./engine.js";
 import type { QueryParams } from "./query.js";
-import { assertRequestParams, assertValid, credentialProblem, nonBlankProblem } from "./validate.js";
+import {
+  assertRequestParams,
+  assertValid,
+  credentialPairProblem,
+  credentialProblem,
+  nonBlankProblem,
+} from "./validate.js";
 import type {
   CatalogueParams,
   DataFileParams,
@@ -77,7 +83,10 @@ export interface DestatisClientOptions extends EngineOptions {
    * password. Takes precedence over `username`/`password` if both are given.
    */
   token?: string;
-  /** Account username (10 chars, may be an email). Requires `password`. */
+  /**
+   * Account username (10 chars, may be an email). Requires `password`: with only
+   * one of the two (and no token) the constructor throws `DestatisValidationError`.
+   */
   username?: string;
   /** Account password (10–50 chars). */
   password?: string;
@@ -229,6 +238,7 @@ export class DestatisClient {
     } else {
       this.username = set("username", username);
       this.password = set("password", password);
+      assertValid("credentials", { username: this.username, password: this.password }, credentialPairProblem);
     }
     this.engine = new RequestEngine(engineOptions);
 

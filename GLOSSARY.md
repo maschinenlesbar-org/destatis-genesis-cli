@@ -75,7 +75,8 @@ meaningful statement possible), `()` (limited informative value), `p`
   ("Webservice/API"). Placed in the `username` request field with no password.
   Generating a new token invalidates the old one.
 - **Username / password** — the account login (username ~10 chars, may be an
-  email; password 10–50 chars). Required together.
+  email; password 10–50 chars). Required together: one without the other is
+  refused before any request, by the CLI and the library alike.
 
 See [DEVELOPING.md](DEVELOPING.md) for how credentials are passed on the wire and
 why redirects are not followed.

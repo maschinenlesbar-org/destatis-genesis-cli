@@ -7,10 +7,11 @@ import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
 import type { RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
-import { DestatisError, DestatisUsageError } from "../client/errors.js";
+import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
 import {
   BASE_URL_USERINFO_PROBLEM,
   baseUrlProblem,
+  CREDENTIAL_PAIR_PROBLEM,
   credentialProblem,
   headerValueProblem,
   intRangeProblem,
@@ -136,9 +137,10 @@ export interface CredentialSources {
  * token that only came from `DESTATIS_API_TOKEN`: the account named on the
  * command line is the one the user means, so an env token must not silently
  * authenticate as someone else. (An explicit `--token` flag still wins.)
- * Supplying only one of username/password is a usage error (exit 2). No
- * credentials at all is allowed here — commands that need auth enforce presence
- * via {@link action}'s `auth` guard.
+ * Precedence only: a lone username or password is passed on as is, and the
+ * library's pair rule rejects it when the client is built (see {@link action}).
+ * No credentials at all is allowed here — commands that need auth enforce
+ * presence via {@link action}'s `auth` guard.
  */
 export function resolveCredentials(
   global: GlobalOptions,
@@ -150,14 +152,30 @@ export function resolveCredentials(
 
   const username = nonBlank(global.username);
   const password = nonBlank(global.password);
-  if (username && password) return { username, password, present: true };
-  if (username || password) {
-    throw new DestatisUsageError(
-      "Provide BOTH --username and --password (or use --token). " +
-        "Env: DESTATIS_USERNAME + DESTATIS_PASSWORD, or DESTATIS_API_TOKEN.",
-    );
+  return {
+    ...(username !== undefined ? { username } : {}),
+    ...(password !== undefined ? { password } : {}),
+    present: username !== undefined && password !== undefined,
+  };
+}
+
+/**
+ * Build the client, rewording the library's credential-pair error with the
+ * flags and env vars that supply the pair.
+ */
+function createClient(deps: CliDeps, options: DestatisClientOptions): ReturnType<CliDeps["createClient"]> {
+  try {
+    return deps.createClient(options);
+  } catch (err) {
+    if (err instanceof DestatisValidationError && err.message.endsWith(CREDENTIAL_PAIR_PROBLEM)) {
+      throw new DestatisUsageError(
+        "Provide BOTH --username and --password (or use --token). " +
+          "Env: DESTATIS_USERNAME + DESTATIS_PASSWORD, or DESTATIS_API_TOKEN.",
+        { cause: err },
+      );
+    }
+    throw err;
   }
-  return { present: false };
 }
 
 /** Translate resolved global CLI options + credentials into client options. */
@@ -344,6 +362,9 @@ export function action(
       username: root.getOptionValueSource("username") === "cli",
       password: root.getOptionValueSource("password") === "cli",
     });
+    // Built first, so a half username/password pair gets the library's pair
+    // error (reworded with the flags) rather than "needs credentials".
+    const client = createClient(deps, toClientOptions(global, creds));
     if (opts.auth !== false && !creds.present) {
       throw new DestatisUsageError(
         "This command needs credentials. Set --token (env DESTATIS_API_TOKEN) " +
@@ -352,7 +373,6 @@ export function action(
       );
     }
     if (creds.present) warnArgvCredentials(deps, command);
-    const client = deps.createClient(toClientOptions(global, creds));
     await fn({ client, global, opts: command.opts() }, positionals);
   };
 }
