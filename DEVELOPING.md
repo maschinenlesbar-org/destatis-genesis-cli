@@ -83,6 +83,13 @@ What the library rejects:
   CLI usage error, because it would silently cancel an env credential. Messages
   never echo the value. The CLI's `parseHeaderValue`/`parseCredential` (and the
   env-var check in `program.ts`) call the same rules.
+- **Base URL** (`baseUrlProblem`, run on the raw `baseUrl` before the
+  trailing-slash strip): embedded userinfo (`https://u:p@host` would become a Basic
+  `Authorization` header; GENESIS never uses Basic auth), surrounding whitespace
+  (`"https://h/ "` requested `/%20/…`), and whitespace or control characters inside
+  it. The scheme and `?`/`#` rules are checked by the engine's `assertHttpScheme`,
+  which still throws `DestatisNetworkError`. `parseBaseUrl` calls `baseUrlProblem`
+  and only appends the flag hint for an embedded credential.
 
 Request defaults: neither side fills in a value the caller did not give. The CLI
 has no `.default()` for `--language` or `find --category`, so an omitted value is

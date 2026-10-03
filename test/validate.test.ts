@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assertRequestParams,
   assertValid,
+  baseUrlProblem,
   credentialProblem,
   headerNameProblem,
   headerValueProblem,
@@ -179,4 +180,17 @@ test("the engine validates userAgent and defaultHeaders at construction", () => 
   );
   assert.throws(() => new RequestEngine({ defaultHeaders: { "Bad Name": "v" } }), DestatisValidationError);
   assert.doesNotThrow(() => new RequestEngine({ userAgent: "é", defaultHeaders: { "X-Trace": "a\tb" } }));
+});
+
+test("baseUrlProblem accepts an http(s) URL and names each rejected shape", () => {
+  assert.equal(baseUrlProblem("https://genesis.destatis.de"), undefined);
+  assert.equal(baseUrlProblem("http://127.0.0.1:8080/prefix/"), undefined);
+  assert.equal(baseUrlProblem(""), "Must be an absolute http(s) URL.");
+  assert.equal(baseUrlProblem("not a url"), "Must be an absolute http(s) URL.");
+  assert.equal(baseUrlProblem("ftp://h.example"), 'Only "http:" and "https:" URLs are allowed.');
+  assert.equal(baseUrlProblem("https://u:p@h.example"), "Must not embed credentials (user:pass@host).");
+  assert.equal(baseUrlProblem("https://h.example/?x=1"), "A base URL cannot have a query (?) or fragment (#).");
+  assert.equal(baseUrlProblem("https://h.example/ "), "A base URL cannot have surrounding whitespace.");
+  assert.equal(baseUrlProblem("https://h.example/a b"), "A base URL cannot contain whitespace or control characters.");
+  assert.equal(baseUrlProblem("https://h.example/a\x7fb"), "A base URL cannot contain whitespace or control characters.");
 });

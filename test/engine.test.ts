@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter, redactUrl } from "../src/client/engine.js";
-import { DestatisApiError, DestatisError, DestatisNetworkError, DestatisParseError } from "../src/client/errors.js";
+import {
+  DestatisApiError,
+  DestatisError,
+  DestatisNetworkError,
+  DestatisParseError,
+  DestatisValidationError,
+} from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -411,16 +417,16 @@ test("redactUrl masks URL userinfo (basic-auth credentials in the base URL)", ()
   assert.match(masked, /genesis\.destatis\.de\/x/);
 });
 
-test("a base URL with embedded userinfo does not leak into the error message", async () => {
+test("a base URL with embedded userinfo is rejected at construction, without leaking it", () => {
   const mt = makeMockTransport(() => rawResponse("nope", "text/plain", 500));
-  const e = new RequestEngine({
-    baseUrl: "https://SECRETUSER:HUNTER2@genesis.destatis.de",
-    transport: mt.transport,
-  });
-  await assert.rejects(
-    () => e.postJson("/find/find", {}, { username: "TOK" }),
-    (err) => err instanceof DestatisApiError && !/SECRETUSER|HUNTER2/.test(err.message),
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "https://SECRETUSER:HUNTER2@genesis.destatis.de", transport: mt.transport }),
+    (err) =>
+      err instanceof DestatisValidationError &&
+      err.message === "Invalid baseUrl: Must not embed credentials (user:pass@host)." &&
+      !/SECRETUSER|HUNTER2/.test(err.message),
   );
+  assert.equal(mt.calls.length, 0);
 });
 
 test("numeric engine options must be integers in range (a negative timeoutMs no longer disables the timeout)", () => {
