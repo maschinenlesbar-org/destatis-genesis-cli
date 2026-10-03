@@ -9,6 +9,7 @@
 //     message `Invalid <name>: <reason>`.
 
 import { DestatisValidationError } from "./errors.js";
+import { CRITERIA, FIND_CATEGORIES, LANGUAGES } from "./params.js";
 
 /** Returns why `value` is invalid, or `undefined` when it is valid. */
 export type Problem<T = unknown> = (value: T) => string | undefined;
@@ -33,12 +34,34 @@ export function nonBlankProblem(value: unknown): string | undefined {
 }
 
 /**
+ * A value must be one of `allowed` (exact, case-sensitive match). The reason
+ * lists the allowed values, worded like commander's `.choices()` error.
+ */
+export function oneOfProblem(allowed: readonly string[]): Problem<unknown> {
+  return (value) =>
+    (allowed as readonly unknown[]).includes(value) ? undefined : `Allowed choices are ${allowed.join(", ")}.`;
+}
+
+/** The enumerated GENESIS request parameters and their allowed values. */
+const CHOICES: Readonly<Record<string, Problem<unknown>>> = {
+  language: oneOfProblem(LANGUAGES),
+  category: oneOfProblem(FIND_CATEGORIES),
+  searchcriterion: oneOfProblem(CRITERIA),
+  sortcriterion: oneOfProblem(CRITERIA),
+};
+
+/**
  * Check the parameters of one GENESIS request before it is sent. `undefined`
- * and `null` mean "omitted" and are never sent; every string that is given must
- * be non-blank. Throws `DestatisValidationError` naming the parameter.
+ * and `null` mean "omitted" and are never sent. An enumerated parameter must be
+ * one of its allowed values; every other string that is given must be
+ * non-blank. Throws `DestatisValidationError` naming the parameter.
  */
 export function assertRequestParams(params: Readonly<Record<string, unknown>>): void {
   for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") assertValid(key, value, nonBlankProblem);
+    if (value === undefined || value === null) continue;
+    // An own-property lookup, so a key such as "constructor" is never a rule.
+    const choice = Object.prototype.hasOwnProperty.call(CHOICES, key) ? CHOICES[key] : undefined;
+    if (choice !== undefined) assertValid(key, value, choice);
+    else if (typeof value === "string") assertValid(key, value, nonBlankProblem);
   }
 }

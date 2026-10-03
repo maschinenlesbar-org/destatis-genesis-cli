@@ -3,10 +3,23 @@
 // are simply not sent. The client checks the given values before any request
 // (see validate.ts): a blank string (empty or whitespace only) is rejected with
 // DestatisValidationError, since GENESIS reads an empty parameter as "no
-// filter". Valid values are sent as-is, never trimmed.
+// filter". The enumerated parameters (language, category, the criteria) must be
+// one of the values exported below. Valid values are sent as-is, never trimmed.
 
+/** Response languages GENESIS offers (`language`). */
+export const LANGUAGES = ["de", "en"] as const;
+/** A response language (`language`). */
+export type Language = (typeof LANGUAGES)[number];
+
+/** Object types `find/find` can search (`category`). */
+export const FIND_CATEGORIES = ["all", "tables", "statistics", "cubes", "variables", "time-series"] as const;
 /** Object types `find/find` can search. */
-export type FindCategory = "all" | "tables" | "statistics" | "cubes" | "variables" | "time-series";
+export type FindCategory = (typeof FIND_CATEGORIES)[number];
+
+/** Fields a catalogue `selection` matches and sorts by (`searchcriterion`, `sortcriterion`). */
+export const CRITERIA = ["Code", "Content"] as const;
+/** A catalogue search or sort criterion. */
+export type Criterion = (typeof CRITERIA)[number];
 
 /** Parameters for `find/find`. */
 export interface FindParams {
@@ -14,7 +27,7 @@ export interface FindParams {
   category?: FindCategory;
   /** Max results (default 100, server max 25000). */
   pagelength?: number;
-  language?: string;
+  language?: Language;
 }
 
 /**
@@ -24,18 +37,18 @@ export interface FindParams {
 export interface CatalogueParams {
   selection?: string;
   area?: string;
-  searchcriterion?: "Code" | "Content";
-  sortcriterion?: "Code" | "Content";
+  searchcriterion?: Criterion;
+  sortcriterion?: Criterion;
   type?: string;
   /** Max results (default 100, server max 25000). */
   pagelength?: number;
-  language?: string;
+  language?: Language;
 }
 
 /** Parameters for the `metadata/*` describe endpoints (`name` is passed separately). */
 export interface MetadataParams {
   area?: string;
-  language?: string;
+  language?: Language;
 }
 
 /**
@@ -66,7 +79,7 @@ export interface DataTableParams {
   classifyingvariable5?: string;
   classifyingkey5?: string;
   stand?: string;
-  language?: string;
+  language?: Language;
 }
 
 /** File-download output formats offered by the `data/*file` endpoints. */

@@ -24,6 +24,7 @@ import type {
   DataFileParams,
   DataTableParams,
   FindParams,
+  Language,
   MetadataParams,
 } from "./params.js";
 import type {
@@ -248,7 +249,7 @@ export class DestatisClient {
   }
 
   /** `helloworld/logincheck` — validate the supplied credentials. */
-  logincheck(language?: string): Promise<LoginCheckResponse> {
+  logincheck(language?: Language): Promise<LoginCheckResponse> {
     return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.authHeaders());
   }
 

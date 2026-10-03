@@ -7,6 +7,9 @@ import assert from "node:assert/strict";
 import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
 import { DestatisValidationError } from "../src/client/errors.js";
 import type { Transport } from "../src/client/http.js";
+import { CRITERIA, FIND_CATEGORIES, LANGUAGES } from "../src/client/params.js";
+import { buildProgram } from "../src/cli/program.js";
+import type { Command } from "commander";
 import { jsonResponse, parity, requestKey, rawResponse, type ParityResult } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -143,4 +146,88 @@ test("parity #1 control: a non-blank filter sends the identical request on both 
     responder: () => jsonResponse(fx.dataTable),
   });
   assertSameRequest(p);
+});
+
+// ---- Finding 7 (PAT-12): language, find category and the criteria are enums ------
+
+const enumCases: Array<{ label: string; argv: string[]; lib: (c: DestatisClient) => Promise<unknown>; key: string }> = [
+  {
+    label: "--language fr find Bev",
+    argv: ["--language", "fr", "find", "Bev"],
+    lib: (c) => c.find({ term: "Bev", language: "fr" as never }),
+    key: "language",
+  },
+  {
+    label: "--language '' find Bev",
+    argv: ["--language", "", "find", "Bev"],
+    lib: (c) => c.find({ term: "Bev", language: "" as never }),
+    key: "language",
+  },
+  {
+    label: "--language EN logincheck",
+    argv: [...TOKEN, "--language", "EN", "logincheck"],
+    lib: (c) => c.logincheck("EN" as never),
+    key: "language",
+  },
+  {
+    label: "--language fr metadata table",
+    argv: [...TOKEN, "--language", "fr", "metadata", "table", "12411-0001"],
+    lib: (c) => c.metadata.table("12411-0001", { language: "fr" as never }),
+    key: "language",
+  },
+  {
+    label: "--language ' en' data table",
+    argv: [...TOKEN, "--language", " en", "data", "table", "12411-0001"],
+    lib: (c) => c.data.table("12411-0001", { language: " en" as never }),
+    key: "language",
+  },
+  {
+    label: "find Bev --category Tables",
+    argv: ["find", "Bev", "--category", "Tables"],
+    lib: (c) => c.find({ term: "Bev", category: "Tables" as never }),
+    key: "category",
+  },
+  {
+    label: "catalogue tables 124* --search-criterion code",
+    argv: [...TOKEN, "catalogue", "tables", "124*", "--search-criterion", "code"],
+    lib: (c) => c.catalogue.tables({ selection: "124*", searchcriterion: "code" as never }),
+    key: "searchcriterion",
+  },
+  {
+    label: "catalogue tables 124* --sort-criterion x",
+    argv: [...TOKEN, "catalogue", "tables", "124*", "--sort-criterion", "x"],
+    lib: (c) => c.catalogue.tables({ selection: "124*", sortcriterion: "x" as never }),
+    key: "sortcriterion",
+  },
+];
+
+for (const ec of enumCases) {
+  test(`parity #7: ${ec.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", ...ec.argv],
+      lib: (t) => ec.lib(client(t)),
+      responder: () => jsonResponse(fx.findResult),
+    });
+    assertBothReject(p, new RegExp(`^Invalid ${ec.key}: Allowed choices are `));
+  });
+}
+
+test("parity #7 control: --language en find Bev --category tables sends the identical request", async () => {
+  const p = await parity({
+    argv: ["--compact", "--language", "en", "find", "Bev", "--category", "tables"],
+    lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev", language: "en", category: "tables" }),
+    responder: () => jsonResponse(fx.findResult),
+  });
+  assertSameRequest(p);
+});
+
+test("parity #7: the CLI's choices are the library's exported value lists", () => {
+  const program = buildProgram();
+  const choices = (cmd: Command, flag: string) => cmd.options.find((o) => o.long === flag)?.argChoices;
+  assert.deepEqual(choices(program, "--language"), [...LANGUAGES]);
+  const find = program.commands.find((c) => c.name() === "find")!;
+  assert.deepEqual(choices(find, "--category"), [...FIND_CATEGORIES]);
+  const tables = program.commands.find((c) => c.name() === "catalogue")!.commands.find((c) => c.name() === "tables")!;
+  assert.deepEqual(choices(tables, "--search-criterion"), [...CRITERIA]);
+  assert.deepEqual(choices(tables, "--sort-criterion"), [...CRITERIA]);
 });

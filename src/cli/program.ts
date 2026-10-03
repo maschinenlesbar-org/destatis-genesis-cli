@@ -10,6 +10,7 @@ import { defaultIO } from "./io.js";
 import { DestatisClient } from "../client/client.js";
 import { MAX_TIMEOUT_MS } from "../client/http.js";
 import { MAX_RETRIES } from "../client/engine.js";
+import { LANGUAGES } from "../client/params.js";
 import {
   parseIntArg,
   parseBoundedInt,
@@ -94,7 +95,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseCredential)
     .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseCredential)
     .addOption(
-      new Option("--language <lang>", "response language").choices(["de", "en"]).default("de"),
+      new Option("--language <lang>", "response language").choices([...LANGUAGES]).default("de"),
     )
     .option(
       "--pagelength <n>",

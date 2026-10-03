@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertRequestParams, assertValid, nonBlankProblem, type Problem } from "../src/client/validate.js";
+import { assertRequestParams, assertValid, nonBlankProblem, oneOfProblem, type Problem } from "../src/client/validate.js";
 import {
   DestatisError,
   DestatisUsageError,
@@ -96,4 +96,26 @@ test("assertRequestParams rejects a blank string, naming the parameter, and skip
     (err: unknown) =>
       err instanceof DestatisValidationError && err.message === "Invalid regionalkey: Expected a non-empty value.",
   );
+});
+
+test("oneOfProblem accepts only the listed values, case-sensitively", () => {
+  const problem = oneOfProblem(["de", "en"] as const);
+  assert.equal(problem("de"), undefined);
+  assert.equal(problem("en"), undefined);
+  for (const v of ["fr", "EN", "", " en", undefined, 1]) {
+    assert.equal(problem(v), "Allowed choices are de, en.", JSON.stringify(v));
+  }
+});
+
+test("assertRequestParams checks the enumerated GENESIS parameters against their lists", () => {
+  assert.doesNotThrow(() =>
+    assertRequestParams({ language: "en", category: "time-series", searchcriterion: "Code", sortcriterion: "Content" }),
+  );
+  assert.throws(
+    () => assertRequestParams({ language: "fr" }),
+    (err: unknown) => err instanceof DestatisValidationError && err.message === "Invalid language: Allowed choices are de, en.",
+  );
+  assert.throws(() => assertRequestParams({ category: "Tables" }), DestatisValidationError);
+  assert.throws(() => assertRequestParams({ searchcriterion: "code" }), DestatisValidationError);
+  assert.throws(() => assertRequestParams({ sortcriterion: "" }), /Invalid sortcriterion: Allowed choices are Code, Content\./);
 });

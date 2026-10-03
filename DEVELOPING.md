@@ -61,6 +61,11 @@ What the library rejects:
   (`selection`, `area`, `type`, `regionalkey`, `classifyingkey1`, …). GENESIS reads
   an empty parameter as "no filter", so it would silently return unfiltered data.
   `undefined` still means "omitted". The CLI's `parseNonEmpty` calls the same rule.
+- **Values outside a GENESIS value list** (`oneOfProblem`): `language` must be one of
+  `LANGUAGES` (`de`, `en`), `find`'s `category` one of `FIND_CATEGORIES`, and
+  `searchcriterion`/`sortcriterion` one of `CRITERIA` (`Code`, `Content`) — exact,
+  case-sensitive. The lists are exported from `params.ts` and the types derive from
+  them; the CLI builds its `.choices()` from the same exports.
 
 ## GENESIS-specific divergences
 

@@ -9,6 +9,7 @@ import type { RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError } from "../client/errors.js";
 import { nonBlankProblem, type Problem } from "../client/validate.js";
+import type { Language } from "../client/params.js";
 
 /**
  * commander value-parser: a non-negative integer in plain decimal notation.
@@ -133,7 +134,7 @@ export interface GlobalOptions {
   token?: string;
   username?: string;
   password?: string;
-  language?: string;
+  language?: Language;
   pagelength?: number;
   timeout?: number;
   userAgent?: string;
@@ -394,8 +395,8 @@ export function action(
 }
 
 /** Common list-request params derived from global options (language, pagelength). */
-export function commonListParams(global: GlobalOptions): { language?: string; pagelength?: number } {
-  const params: { language?: string; pagelength?: number } = {};
+export function commonListParams(global: GlobalOptions): { language?: Language; pagelength?: number } {
+  const params: { language?: Language; pagelength?: number } = {};
   if (global.language !== undefined) params.language = global.language;
   if (global.pagelength !== undefined) params.pagelength = global.pagelength;
   return params;
