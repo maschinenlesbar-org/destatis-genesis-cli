@@ -32,7 +32,7 @@ error (exit 2), not "the last one wins".
 | `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`) |
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
-| `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout |
+| `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout; `-o -` means stdout |
 | `--force` | overwrite the `--output` file if it already exists (otherwise the write is refused — also when a symlink, even a dangling one, sits at that path) |
 
 ## hello / logincheck

@@ -613,3 +613,15 @@ for (const { label, argv } of BLANK_CASES) {
     assert.match(cli.err.join("\n"), /non-empty/);
   });
 }
+
+test("-o - writes to stdout and creates no file named '-' (P12)", async () => {
+  const json = makeCli(() => jsonResponse(fx.findResult));
+  assert.equal(await run(["-o", "-", "--compact", "find", "x"], json.deps), 0, json.err.join("\n"));
+  assert.equal(json.files.size, 0);
+  assert.deepEqual(JSON.parse(json.out.join("")), fx.findResult);
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+  const raw = makeCli(() => rawResponse(zip, "application/zip"), { DESTATIS_API_TOKEN: "TOK" });
+  assert.equal(await run(["data", "tablefile", "12411-0001", "-o", "-"], raw.deps), 0, raw.err.join("\n"));
+  assert.equal(raw.files.size, 0);
+  assert.match(raw.err.join("\n"), /Wrote 6 bytes to stdout/);
+});
