@@ -351,6 +351,26 @@ test("data tablefile with a Status.Code 104 reply (unknown code) exits 4 and wri
   assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
 });
 
+test("data cubefile with a 200 HTML page instead of the file exits 1 and writes no file (03#1)", async () => {
+  const page = "<!DOCTYPE html><html><body>Wartungsarbeiten</body></html>";
+  for (const [body, type] of [[page, "text/html"], [page, "application/octet-stream"], [`\uFEFF  <html>${page}`, ""]] as const) {
+    const cli = makeCli(() => rawResponse(body, type), { DESTATIS_API_TOKEN: "TOK" });
+    const code = await run(["data", "cubefile", "12411BJ001", "-o", "data.zip"], cli.deps);
+    assert.equal(code, 1, `${type}: ${cli.err.join("\n")}`);
+    assert.equal(cli.files.size, 0);
+    assert.match(cli.err.join("\n"), /got an HTML page/);
+  }
+});
+
+test("data tablefile writes a ZIP whatever its Content-Type, and HTML when --format html asked for it", async () => {
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
+  const asZip = makeCli(() => rawResponse(zip, "text/html"), { DESTATIS_API_TOKEN: "TOK" });
+  assert.equal(await run(["data", "tablefile", "12411-0001", "-o", "t.zip"], asZip.deps), 0, asZip.err.join("\n"));
+  assert.equal(asZip.files.size, 1);
+  const html = makeCli(() => rawResponse("<html>table</html>", "text/html"), { DESTATIS_API_TOKEN: "TOK" });
+  assert.equal(await run(["data", "tablefile", "12411-0001", "--format", "html", "-o", "t.html"], html.deps), 0, html.err.join("\n"));
+});
+
 test("data tablefile with an empty body exits 1 and writes no file", async () => {
   const cli = makeCli(() => ({ status: 200, headers: { "content-type": "application/zip" }, body: Buffer.alloc(0) }));
   const code = await run([...TOKEN, "data", "tablefile", "12411-0001", "-o", "t.zip"], cli.deps);
@@ -445,7 +465,9 @@ test("DEL and C1 control characters in server data are escaped in the JSON outpu
 
 test("a deeply nested response fails pretty-printing cleanly and still prints with --compact", async () => {
   const depth = 200_000;
-  const deep = () => rawResponse("[".repeat(depth) + "]".repeat(depth), "application/json");
+  // A valid find envelope whose `Tables` list nests very deeply.
+  const text = '{"Status":{"Code":0,"Content":"ok","Type":"Information"},"Tables":' + "[".repeat(depth) + "]".repeat(depth) + "}";
+  const deep = () => rawResponse(text, "application/json");
   const pretty = makeCli(deep);
   assert.equal(await run(["find", "x"], pretty.deps), 1);
   assert.deepEqual(pretty.out, []);
@@ -455,7 +477,7 @@ test("a deeply nested response fails pretty-printing cleanly and still prints wi
   // should a runtime's stack still be too small, it must fail just as cleanly.
   const compact = makeCli(deep);
   const code = await run(["--compact", "find", "x"], compact.deps);
-  if (code === 0) assert.equal(compact.out.join("").length, 2 * depth);
+  if (code === 0) assert.equal(compact.out.join("").length, text.length);
   else assert.equal(compact.err.join("\n"), "Error: The response is nested too deeply to print.");
 });
 

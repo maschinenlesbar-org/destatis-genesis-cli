@@ -655,7 +655,11 @@ for (const [label, argv, lib] of [
   ["find Bev", ["find", "Bev"], (t: Transport) => new DestatisClient({ transport: t }).find({ term: "Bev" })],
 ] as const) {
   test(`parity #6 control: ${label} still works without credentials on both sides`, async () => {
-    const p = await parity({ argv: ["--compact", ...argv], lib, responder: () => jsonResponse(fx.findResult) });
+    const p = await parity({
+      argv: ["--compact", ...argv],
+      lib,
+      responder: (req) => jsonResponse(req.url.endsWith("/whoami") ? fx.whoami : fx.findResult),
+    });
     assert.equal(p.cli.code, 0, p.cli.err);
     assert.ok(p.lib.ok);
     assert.deepEqual(p.cli.requests.map(requestKey), p.lib.requests.map(requestKey));

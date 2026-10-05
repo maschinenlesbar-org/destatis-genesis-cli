@@ -38,7 +38,7 @@ test("postJson sends POST with credential headers and a form-urlencoded body", a
 test("Content-Length is set even for an empty POST body (avoids GENESIS 411)", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.loginOk));
   const e = new RequestEngine({ transport: mt.transport });
-  await e.postJson("/helloworld/logincheck", {}, { username: "TOK" });
+  await e.postJson("/helloworld/logincheck", {}, { username: "TOK" }, "unchecked");
   assert.equal(mt.last().headers?.["Content-Length"], "0");
 });
 
@@ -148,10 +148,12 @@ test("a bare 404 (no GENESIS code) is still not-found", async () => {
   );
 });
 
-test("a flat non-error body (logincheck / whoami shape) is returned as-is", async () => {
+test("a flat non-error body (logincheck / whoami shape) is returned as-is where the shape is unchecked", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.loginOk));
   const e = new RequestEngine({ transport: mt.transport });
-  assert.deepEqual(await e.postJson("/helloworld/logincheck", {}, {}), fx.loginOk);
+  assert.deepEqual(await e.postJson("/helloworld/logincheck", {}, {}, "unchecked"), fx.loginOk);
+  // The enveloped endpoints require the envelope (P9).
+  await assert.rejects(e.postJson("/find/find", {}, {}), DestatisParseError);
 });
 
 test("a numeric-string Code or a missing Code with an error Type is still an error", async () => {

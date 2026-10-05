@@ -17,7 +17,7 @@
 //   await c.find({ term: "Bevölkerung" });
 //   await c.data.table("12411-0001", { startyear: "2020" });
 
-import { RequestEngine, type EngineOptions, type RawResponse } from "./engine.js";
+import { RequestEngine, type EngineOptions, type RawResponse, type ResponseShape } from "./engine.js";
 import type { QueryParams } from "./query.js";
 import {
   assertRequestParams,
@@ -67,9 +67,10 @@ async function postJson<T>(
   path: string,
   params: QueryParams,
   auth: AuthHeaders,
+  shape: ResponseShape = "envelope",
 ): Promise<T> {
   assertRequestParams(params);
-  return e.postJson<T>(path, params, auth());
+  return e.postJson<T>(path, params, auth(), shape);
 }
 
 /** Validate a request object's required `name` (the object code) and its parameters. */
@@ -282,7 +283,7 @@ export class DestatisClient {
    * `DestatisValidationError` when the client has none (there is nothing to check).
    */
   logincheck(language?: Language): Promise<LoginCheckResponse> {
-    return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.requireAuth());
+    return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.requireAuth(), "unchecked");
   }
 
   /** `find/find` — full-text search across object types. `term` must be non-blank. */
