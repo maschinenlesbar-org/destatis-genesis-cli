@@ -65,6 +65,18 @@ export function redactSecrets(text: string, secrets: readonly string[]): string 
   return out;
 }
 
+/**
+ * Longest server text (in characters) an error keeps as its `detail` and shows in its
+ * message; the full answer stays in `body`. A server that answers with a 200 kB error
+ * page must not flood stderr.
+ */
+export const MAX_MESSAGE_VALUE_LENGTH = 500;
+
+/** `text` cut to MAX_MESSAGE_VALUE_LENGTH characters, ending in "…" when cut. */
+export function cutForMessage(text: string): string {
+  return text.length > MAX_MESSAGE_VALUE_LENGTH ? `${text.slice(0, MAX_MESSAGE_VALUE_LENGTH)}…` : text;
+}
+
 /** Base class for every error originating from this client. */
 export class DestatisError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -90,7 +102,8 @@ export class DestatisError extends Error {
  *
  * At least one of the two is always present, and both are when a non-2xx reply
  * carried a GENESIS status body; `detail` holds the human-readable message
- * (`Status.Content` / `Content`, or a parsed field from an HTTP error body).
+ * (`Status.Content` / `Content`, or a parsed field from an HTTP error body), cut at
+ * `MAX_MESSAGE_VALUE_LENGTH` characters (the full answer is in `body`).
  */
 export class DestatisApiError extends DestatisError {
   readonly httpStatus: number | undefined;
@@ -118,7 +131,8 @@ export class DestatisApiError extends DestatisError {
     detail?: string;
     credentialsSent?: boolean;
   }) {
-    const detailPart = args.detail ? `: ${args.detail}` : "";
+    const detail = args.detail === undefined ? undefined : cutForMessage(args.detail);
+    const detailPart = detail ? `: ${detail}` : "";
     const typePart = args.statusType ? ` (${args.statusType})` : "";
     const genesisPart =
       args.code !== undefined
@@ -138,7 +152,7 @@ export class DestatisApiError extends DestatisError {
     this.url = args.url;
     this.method = args.method;
     this.body = args.body;
-    this.detail = args.detail;
+    this.detail = detail;
     this.credentialsSent = args.credentialsSent;
   }
 

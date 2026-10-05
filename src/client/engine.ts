@@ -30,7 +30,15 @@ import {
   redactCredentials,
   redactSecrets,
 } from "./errors.js";
-import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
+import {
+  assertValid,
+  baseUrlProblem,
+  functionProblem,
+  headerNameProblem,
+  headerValueProblem,
+  intRangeProblem,
+  plainObjectProblem,
+} from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
@@ -505,14 +513,15 @@ export class RequestEngine {
     // one: the engine is exported and may be handed a custom transport.
     assertValid("baseUrl", baseUrl, baseUrlProblem);
     this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.transport = options.transport ?? nodeHttpTransport;
+    this.transport =
+      options.transport === undefined ? nodeHttpTransport : assertValid("transport", options.transport, functionProblem);
     // Only `undefined` selects the default; a given value must be a valid header
     // value (a blank one is rejected, not silently replaced).
     this.userAgent =
       options.userAgent === undefined
         ? DEFAULT_USER_AGENT
         : assertValid("userAgent", options.userAgent, headerValueProblem);
-    const defaultHeaders = options.defaultHeaders ?? {};
+    const defaultHeaders = options.defaultHeaders === undefined ? {} : assertValid("defaultHeaders", options.defaultHeaders, plainObjectProblem);
     for (const [name, value] of Object.entries(defaultHeaders)) {
       assertValid("defaultHeaders name", name, headerNameProblem);
       assertValid(`defaultHeaders["${name}"]`, value, headerValueProblem);
@@ -527,7 +536,7 @@ export class RequestEngine {
       DEFAULT_MAX_RESPONSE_BYTES,
       Number.MAX_SAFE_INTEGER,
     );
-    this.sleep = options.sleep ?? realSleep;
+    this.sleep = options.sleep === undefined ? realSleep : assertValid("sleep", options.sleep, functionProblem);
   }
 
   /**

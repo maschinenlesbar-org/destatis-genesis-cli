@@ -562,3 +562,16 @@ test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates", () => {
   }
   assert.equal(MAX_RETRY_AFTER_MS, 30_000);
 });
+
+test("server text in an error is cut at 500 characters; the body keeps it all (P13)", async () => {
+  const long = "x".repeat(5000);
+  const mt = makeMockTransport(() => jsonResponse({ Status: { Code: -1, Content: long, Type: "Fehler" } }));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(e.postJson("/find/find", {}, {}), (err: unknown) => {
+    assert.ok(err instanceof DestatisApiError);
+    assert.equal(err.detail?.length, 501);
+    assert.ok(err.message.length < 700, String(err.message.length));
+    assert.ok(err.body.includes(long));
+    return true;
+  });
+});

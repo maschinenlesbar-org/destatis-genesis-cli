@@ -23,6 +23,8 @@ export {
   DestatisValidationError,
   DestatisParseError,
   credentialsIn,
+  cutForMessage,
+  MAX_MESSAGE_VALUE_LENGTH,
   redactCredentials,
   redactSecrets,
 } from "./errors.js";
@@ -40,6 +42,8 @@ export {
   looksLikeToken,
   nonBlankProblem,
   oneOfProblem,
+  plainObjectProblem,
+  functionProblem,
 } from "./validate.js";
 export type { Problem } from "./validate.js";
 
