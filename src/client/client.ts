@@ -294,11 +294,17 @@ export class DestatisClient {
   }
 
   /**
-   * `helloworld/logincheck` — validate the supplied credentials. Rejects with
+   * `helloworld/logincheck` — validate the supplied credentials. Resolves only when
+   * GENESIS confirms the login. Wrong credentials — which GENESIS answers with HTTP 200
+   * and an error text in `Status` (or the token echoed as `Username`) — reject with a
+   * `DestatisApiError` whose `isAuthError` (and `loginRejected`) is true; an answer that
+   * confirms nothing rejects with `DestatisParseError`. Rejects with
    * `DestatisValidationError` when the client has none (there is nothing to check).
    */
-  logincheck(language?: Language): Promise<LoginCheckResponse> {
-    return postJson(this.engine, `${API}/helloworld/logincheck`, { language }, () => this.requireAuth(), "unchecked");
+  async logincheck(language?: Language): Promise<LoginCheckResponse> {
+    const params: QueryParams = { language };
+    assertRequestParams(params);
+    return this.engine.postLoginCheck(`${API}/helloworld/logincheck`, params, this.requireAuth());
   }
 
   /** `find/find` — full-text search across object types. `term` must be non-blank. */

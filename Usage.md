@@ -40,6 +40,12 @@ destatis hello           # helloworld/whoami — needs NO credentials
 destatis logincheck      # helloworld/logincheck — validates your credentials
 ```
 
+`logincheck` exits **0** only when GENESIS confirms the login. GENESIS answers it
+with HTTP 200 either way; wrong credentials come back as an error text in `Status`
+(and a wrong token echoed as `Username`), which the CLI reports as `GENESIS login
+rejected (HTTP 200) …` plus the credentials hint, exit **1**. An answer that confirms
+nothing (no `Status`, no `Username`) exits 1 without the hint.
+
 ## find — full-text search
 
 ```bash
@@ -163,6 +169,8 @@ A reader that stops early (`destatis find … | head`) ends the run quietly with
 > das Passwort…","Type":"ERROR"}` body. The CLI reads that body, so the error is
 > `GENESIS status 2 (ERROR) / HTTP 404 for POST …: …Nutzernamen…`, followed by a
 > credentials hint, and exits **1**. Only a 404 without a GENESIS code exits 4.
+> `logincheck` gets the same text on an HTTP 200 instead; it exits **1** with the
+> hint too (`GENESIS login rejected (HTTP 200) …`).
 
 ## Gotchas
 

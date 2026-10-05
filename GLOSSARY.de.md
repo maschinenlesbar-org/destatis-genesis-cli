@@ -43,6 +43,10 @@ Jede Antwort außer von `helloworld` steckt in einer Hülle:
 | `Object` | Nutzdaten für Daten und Metadaten (nicht näher typisiert; bei `data/table` ein CSV-String in `Object.Content`). |
 
 `helloworld/whoami` und `helloworld/logincheck` verwenden diese Hülle **nicht**.
+`logincheck` antwortet mit HTTP 200, ob die Zugangsdaten stimmen oder nicht: `Status` ist
+ein Text – ein Fehlertext („Ein Fehler ist aufgetreten …“) heißt, sie wurden abgelehnt,
+und die CLI endet mit Exit 1 und dem Hinweis auf die Zugangsdaten – und `Username` nennt
+das Konto (ein falscher Token kommt dort als Echo zurück).
 
 ## Werte von `Status.Code`
 

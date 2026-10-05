@@ -42,6 +42,10 @@ Every non-`helloworld` response is wrapped:
 | `Object` | data/metadata payload (opaque; for `data/table`, a CSV string in `Object.Content`). |
 
 `helloworld/whoami` and `helloworld/logincheck` do **not** use this envelope.
+`logincheck` answers HTTP 200 whether or not the credentials are right: its `Status` is a
+text — an error text ("Ein Fehler ist aufgetreten …") means they were rejected, and the
+CLI exits 1 with the credentials hint — and `Username` names the account (a wrong token
+comes back echoed there).
 
 ## `Status.Code` values
 

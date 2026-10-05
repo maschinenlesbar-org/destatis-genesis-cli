@@ -257,6 +257,21 @@ body on a non-2xx status. `toApiError` reads it (enveloped or flat, via
 | `15` (not authorized / credentials not recognized) | 401 | `DestatisApiError`, `isAuthError` → credentials hint (exit 1) |
 | `2` (wrong username/password or token) | **404** | `DestatisApiError`, `isAuthError` → credentials hint (exit 1). `isNotFound` ignores a 404 that carries a GENESIS code (seen live on 2026-09-15 for both a wrong login and a wrong token) |
 
+`helloworld/logincheck` is different again (P18): it answers HTTP **200** whether
+or not the credentials are right, with a *string* `Status` and the `Username` the
+server logged in. Live (2026-10-05), wrong credentials give `{"Status":"Ein Fehler ist
+aufgetreten. (Bitte prüfen und korrigieren Sie Ihren Nutzernamen oder Ihren Token bzw.
+das Passwort.)","Username":"<the token, or the user name sent>"}`; a good login
+`{"Status":"Sie wurden erfolgreich an- und abgemeldet!","Username":"…"}`.
+`engine.ts:postLoginCheck` evaluates it with `loginVerdict` (exported): an error text,
+an error `Type` or a `Code` other than 0/22 (string, enveloped or flat `Status`), or an
+unrecognised text with the token echoed as `Username`, is a `DestatisApiError` with
+`loginRejected` (so `isAuthError`: exit 1 + credentials hint); a success text (or Code
+0) with a non-empty `Username` resolves; anything else confirms nothing and is a
+`DestatisParseError`. A success text wins over the token echo, since whether GENESIS
+echoes a *valid* token is unknown (no account to check). Shared with
+regionalstatistik-cli: `test/conformance-p18-genesis-access-check.test.ts`.
+
 Key off the numeric `Code`, never the German/English `Type` text alone.
 `DestatisApiError` carries both an optional HTTP `httpStatus` (transport/auth
 failures) and an optional logical `code` (`Status.Code`); `run.ts` branches on
