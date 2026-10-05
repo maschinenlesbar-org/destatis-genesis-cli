@@ -283,8 +283,11 @@ for every transport (P5):
 - **Exit codes** (`run.ts`): help/version → 0; usage/credential error → 2;
   not-found → 4; other errors → 1.
 - **Retry/backoff:** transient `429`/`503` retried up to `maxRetries` (0..10),
-  each after the response's `Retry-After` (delay-seconds or an IMF-fixdate; a
-  malformed one falls back to linear backoff, one above 30 s is not retried). Note
+  each after the linear backoff (`retryDelayMs` × attempt), or the response's
+  `Retry-After` (delay-seconds or an IMF-fixdate) when that is longer — never sooner,
+  so `Retry-After: 0` or a past date can't make a burst (P6). A malformed one falls
+  back to the backoff; one above 30 s is not retried, and the error says how long the
+  server asked to wait. Note
   GENESIS rate-limits on *concurrency* (~3 parallel) and does not reliably emit
   `429`/`503`, so this path is largely inert — keep it, don't rely on it.
 - **`--base-url`** accepts only `http:`/`https:`. Pointing it at the sibling
