@@ -85,6 +85,11 @@ const table = await genesis.data.table("12411-0001", { startyear: "2020" });
 // table.Object.Content is the table as a ";"-delimited CSV string.
 ```
 
+Each call accepts only the parameter keys of its endpoint: GENESIS ignores one it
+does not know (a misspelt `startYear`) and would answer unfiltered, so the client
+rejects it with `DestatisValidationError` before any request. Pass
+`{ allowUnknownParams: true }` as the last argument to send a newer parameter anyway.
+
 The client is usable independently of the CLI. Errors are typed
 (`DestatisApiError`, `DestatisNetworkError`, `DestatisParseError`,
 `DestatisUsageError`). A custom `transport` (e.g. one built on `fetch`) gets the

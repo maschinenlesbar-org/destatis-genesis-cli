@@ -18,7 +18,9 @@ an unknown command or surplus argument, and in a server answer that echoes them.
 export DESTATIS_API_TOKEN="…"          # or DESTATIS_USERNAME + DESTATIS_PASSWORD
 ```
 
-Global options (valid on any command):
+Global options (valid on any command). Each option takes one value: giving one
+twice (`--start-year 2020 --start-year 2021`, `--token a --token b`) is a usage
+error (exit 2), not "the last one wins".
 
 | Flag | Meaning |
 |---|---|
