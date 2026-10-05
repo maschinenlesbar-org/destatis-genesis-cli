@@ -18,6 +18,8 @@ HTTP dependencies (built on `node:http`/`https`), strict TypeScript, ESM.
 npm install -g @maschinenlesbar.org/destatis-genesis-cli
 ```
 
+This installs the **`destatis`** command. Requires **Node.js 22.12+**.
+
 ## Credentials
 
 GENESIS needs a **free registered account** — register at

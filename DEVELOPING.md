@@ -320,7 +320,8 @@ for every transport (P5):
 
 ## Testing
 
-`node --test` on the compiled output; no jest/vitest. Tests inject a mock
+`node --test` on the compiled output; no jest/vitest. Node 22.12 or later
+(`engines`); CI (`ci.yml`) type-checks, builds and tests on Node 22/24. Tests inject a mock
 `Transport` and a mocked `CliDeps` (`test/helpers.ts`, `test/fixtures.ts`). The
 GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
 credential injection + token precedence (`client.test.ts`), the credential guard
