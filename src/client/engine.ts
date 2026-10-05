@@ -12,7 +12,14 @@
 
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { DestatisApiError, DestatisParseError, credentialsIn, redactCredentials } from "./errors.js";
+import {
+  DestatisApiError,
+  DestatisError,
+  DestatisParseError,
+  credentialsIn,
+  redactCredentials,
+  redactSecrets,
+} from "./errors.js";
 import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
@@ -230,6 +237,59 @@ function credentialsSent(authHeaders: Record<string, string> | undefined): boole
   return authHeaders === undefined ? undefined : Object.keys(authHeaders).length > 0;
 }
 
+/** What the error paths of one request need to know about its credentials. */
+interface RequestContext {
+  /** See `credentialsSent`. */
+  sent: boolean | undefined;
+  /** The credential values sent, in the forms an echo may take (raw, JSON- and URL-escaped). */
+  secrets: readonly string[];
+}
+
+function contextOf(authHeaders: Record<string, string> | undefined): RequestContext {
+  const secrets = new Set<string>();
+  for (const value of Object.values(authHeaders ?? {})) {
+    secrets.add(value);
+    secrets.add(JSON.stringify(value).slice(1, -1));
+    secrets.add(encodeURIComponent(value));
+  }
+  return { sent: credentialsSent(authHeaders), secrets: [...secrets] };
+}
+
+/**
+ * `text` without the request's credentials: a server body or a transport message may
+ * echo the token, username or password (`logincheck` returns the token as
+ * `Username`), and that text ends up in an error's message, `detail` or `body`.
+ */
+function scrub(text: string, ctx: RequestContext): string {
+  return ctx.secrets.length === 0 ? text : redactSecrets(text, ctx.secrets);
+}
+
+/**
+ * A thrown value without the request's credentials: the original when its text carries
+ * none, otherwise a copy with them scrubbed (message, name, `code` and the cause chain
+ * kept), so logging an error with its causes can't reveal them.
+ */
+function scrubThrown(thrown: unknown, ctx: RequestContext, depth = 0): unknown {
+  if (ctx.secrets.length === 0 || depth > 5) return thrown;
+  if (typeof thrown === "string") return scrub(thrown, ctx);
+  if (!(thrown instanceof Error)) return thrown;
+  const inner = scrubThrown(thrown.cause, ctx, depth + 1);
+  const message = scrub(thrown.message, ctx);
+  const stack = thrown.stack ?? "";
+  if (message === thrown.message && inner === thrown.cause && scrub(stack, ctx) === stack) return thrown;
+  const options = inner === undefined ? undefined : { cause: inner };
+  // Keep the library's own classes (a DestatisNetworkError stays one); anything else
+  // becomes a plain Error carrying the original name.
+  const copy =
+    thrown instanceof DestatisError
+      ? new (thrown.constructor as new (m: string, o?: { cause?: unknown }) => Error)(message, options)
+      : new Error(message, options);
+  copy.name = thrown.name;
+  const code = (thrown as { code?: unknown }).code;
+  if (code !== undefined) Object.assign(copy, { code });
+  return copy;
+}
+
 /** The `{ Code, Content, Type }` status object of a GENESIS reply. */
 interface GenesisStatus {
   Code?: unknown;
@@ -350,16 +410,23 @@ export class RequestEngine {
       headers["Content-Length"] = String(body.length);
     }
 
+    const ctx = contextOf(options.authHeaders);
     let attempt = 0;
     for (;;) {
-      const response = await this.transport({
-        method,
-        url,
-        headers,
-        ...(body !== undefined ? { body } : {}),
-        timeoutMs: this.timeoutMs,
-        ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
-      });
+      let response: Awaited<ReturnType<Transport>>;
+      try {
+        response = await this.transport({
+          method,
+          url,
+          headers,
+          ...(body !== undefined ? { body } : {}),
+          timeoutMs: this.timeoutMs,
+          ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
+        });
+      } catch (cause) {
+        // A transport's message may quote the request, headers included.
+        throw scrubThrown(cause, ctx);
+      }
 
       const status = response.status;
       const retryable = status === 429 || status === 503;
@@ -378,7 +445,7 @@ export class RequestEngine {
       // to stderr by renderRaw, so strip any embedded terminal control chars.
       const contentType = sanitizeServerText(String(response.headers["content-type"] ?? ""));
       if (status < 200 || status >= 300) {
-        throw this.toApiError(method, url, status, response.body, credentialsSent(options.authHeaders));
+        throw this.toApiError(method, url, status, response.body, ctx);
       }
 
       return { data: response.body, contentType, status };
@@ -388,7 +455,7 @@ export class RequestEngine {
   /** GET a JSON body without credentials (helloworld/whoami). */
   async getJson<T>(path: string): Promise<T> {
     const res = await this.request("GET", path, { accept: "application/json" });
-    return this.decodeJson<T>("GET", path, res, undefined);
+    return this.decodeJson<T>("GET", path, res, contextOf(undefined));
   }
 
   /** POST form-encoded params (with credential headers) and parse the JSON reply. */
@@ -398,7 +465,7 @@ export class RequestEngine {
     authHeaders: Record<string, string>,
   ): Promise<T> {
     const res = await this.request("POST", path, { params, accept: "application/json", authHeaders });
-    return this.decodeJson<T>("POST", path, res, credentialsSent(authHeaders));
+    return this.decodeJson<T>("POST", path, res, contextOf(authHeaders));
   }
 
   /**
@@ -428,22 +495,24 @@ export class RequestEngine {
       throw new DestatisParseError(`Empty response body from ${path}: expected a file download.`);
     }
     const jsonType = /json/i.test(res.contentType);
-    const text = res.data.toString("utf8");
-    if (!jsonType && !text.trimStart().startsWith("{")) return res;
+    const ctx = contextOf(authHeaders);
+    const raw = res.data.toString("utf8");
+    if (!jsonType && !raw.trimStart().startsWith("{")) return res;
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(raw);
     } catch (cause) {
       if (!jsonType) return res; // starts with "{" but is not JSON: a real file
       throw new DestatisParseError(
         `Expected a file download from ${path}, got an unparseable reply labelled ${res.contentType}.`,
-        { cause },
+        { cause: scrubThrown(cause, ctx) },
       );
     }
     const url = this.buildUrl(path);
-    const sent = credentialsSent(authHeaders);
-    this.checkLogicalStatus("POST", url, text, parsed, sent);
+    const text = scrub(raw, ctx);
+    const sent = ctx.sent;
+    this.checkLogicalStatus("POST", url, text, parsed, ctx);
     const s = genesisStatus(parsed);
     if (s === undefined) {
       throw new DestatisParseError(
@@ -451,8 +520,8 @@ export class RequestEngine {
       );
     }
     const code = statusCode(s.Code);
-    const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
-    const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
+    const type = typeof s.Type === "string" ? sanitizeServerText(scrub(s.Type, ctx)) : undefined;
+    const content = typeof s.Content === "string" ? sanitizeServerText(scrub(s.Content, ctx)) : undefined;
     throw new DestatisApiError({
       method: "POST",
       url: redactUrl(url),
@@ -468,7 +537,7 @@ export class RequestEngine {
     method: "GET" | "POST",
     path: string,
     res: RawResponse,
-    sent: boolean | undefined,
+    ctx: RequestContext,
   ): T {
     const text = res.data.toString("utf8");
     // Every GENESIS endpoint answers with a JSON body (the envelope, or the
@@ -481,9 +550,9 @@ export class RequestEngine {
     try {
       parsed = JSON.parse(text);
     } catch (cause) {
-      throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause });
+      throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause: scrubThrown(cause, ctx) });
     }
-    this.checkLogicalStatus(method, this.buildUrl(path), text, parsed, sent);
+    this.checkLogicalStatus(method, this.buildUrl(path), scrub(text, ctx), parsed, ctx);
     return parsed as T;
   }
 
@@ -509,15 +578,17 @@ export class RequestEngine {
     url: string,
     body: string,
     parsed: unknown,
-    sent: boolean | undefined,
+    ctx: RequestContext,
   ): void {
     const s = genesisStatus(parsed);
     if (s === undefined) return;
     const code = statusCode(s.Code);
     // Type / Content are server-controlled and reach the terminal via the error
-    // message; strip any embedded terminal control characters at the source.
-    const type = typeof s.Type === "string" ? sanitizeServerText(s.Type) : undefined;
-    const content = typeof s.Content === "string" ? sanitizeServerText(s.Content) : undefined;
+    // message; strip any embedded terminal control characters (and any echoed
+    // credential) at the source. `body` comes scrubbed.
+    const type = typeof s.Type === "string" ? sanitizeServerText(scrub(s.Type, ctx)) : undefined;
+    const content = typeof s.Content === "string" ? sanitizeServerText(scrub(s.Content, ctx)) : undefined;
+    const sent = ctx.sent;
     const isErrorType = type !== undefined && /error|fehler/i.test(type);
     // An error Type is an error whatever the code looks like — a missing or
     // non-numeric Code must not turn a "Fehler" into success.
@@ -550,9 +621,11 @@ export class RequestEngine {
     url: string,
     status: number,
     body: Buffer,
-    sent: boolean | undefined,
+    ctx: RequestContext,
   ): DestatisApiError {
-    const text = body.toString("utf8");
+    const sent = ctx.sent;
+    // Scrubbed first: everything below (detail, statusType, body) derives from it.
+    const text = scrub(body.toString("utf8"), ctx);
     let detail: string | undefined;
     let code: number | undefined;
     let statusType: string | undefined;

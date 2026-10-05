@@ -216,8 +216,11 @@ class DataGroup {
 
 export class DestatisClient {
   private readonly engine: RequestEngine;
-  private readonly username: string | undefined;
-  private readonly password: string | undefined;
+  // Real private fields (not TypeScript's `private`): util.inspect, console.log and
+  // JSON.stringify of a client never show them, so logging a client can't reveal the
+  // token or password.
+  readonly #username: string | undefined;
+  readonly #password: string | undefined;
 
   readonly catalogue: CatalogueGroup;
   readonly metadata: MetadataGroup;
@@ -235,12 +238,12 @@ export class DestatisClient {
       v !== undefined && v.trim() !== "" ? assertValid(name, v, credentialProblem) : undefined;
     const tok = set("token", token);
     if (tok) {
-      this.username = tok;
-      this.password = undefined;
+      this.#username = tok;
+      this.#password = undefined;
     } else {
-      this.username = set("username", username);
-      this.password = set("password", password);
-      assertValid("credentials", { username: this.username, password: this.password }, credentialPairProblem);
+      this.#username = set("username", username);
+      this.#password = set("password", password);
+      assertValid("credentials", { username: this.#username, password: this.#password }, credentialPairProblem);
     }
     this.engine = new RequestEngine(engineOptions);
 
@@ -257,16 +260,16 @@ export class DestatisClient {
    * `DestatisValidationError` (`Invalid credentials: …`) before any request.
    */
   private requireAuth(): Record<string, string> {
-    assertValid("credentials", { username: this.username }, credentialsRequiredProblem);
+    assertValid("credentials", { username: this.#username }, credentialsRequiredProblem);
     return this.authHeaders();
   }
 
   /** The credential headers merged into every request that takes them (none when unset). */
   private authHeaders(): Record<string, string> {
-    if (!this.username) return {};
-    return this.password
-      ? { username: this.username, password: this.password }
-      : { username: this.username };
+    if (!this.#username) return {};
+    return this.#password
+      ? { username: this.#username, password: this.#password }
+      : { username: this.#username };
   }
 
   /** `helloworld/whoami` — connectivity check; unauthenticated GET. */
