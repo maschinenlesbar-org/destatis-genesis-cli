@@ -22,6 +22,9 @@ export {
   DestatisUsageError,
   DestatisValidationError,
   DestatisParseError,
+  credentialsIn,
+  redactCredentials,
+  redactSecrets,
 } from "./errors.js";
 export {
   assertRequestParams,
@@ -34,6 +37,7 @@ export {
   headerNameProblem,
   headerValueProblem,
   intRangeProblem,
+  looksLikeToken,
   nonBlankProblem,
   oneOfProblem,
 } from "./validate.js";

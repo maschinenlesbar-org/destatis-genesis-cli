@@ -16,6 +16,7 @@ import {
   parseBoundedInt,
   parseCredential,
   parseHeaderValue,
+  parseSecret,
   parseNonEmpty,
   parseBaseUrl,
 } from "./shared.js";
@@ -91,9 +92,9 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .version(VERSION)
     .option("--base-url <url>", "API base URL", parseBaseUrl, "https://genesis.destatis.de")
-    .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)", parseCredential)
-    .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseCredential)
-    .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseCredential)
+    .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)", parseSecret("--token <token>"))
+    .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseSecret("--username <user>"))
+    .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseSecret("--password <pass>"))
     .addOption(
       // No .default(): an omitted --language is not sent, exactly like the library,
       // and GENESIS answers in German.

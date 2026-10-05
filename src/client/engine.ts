@@ -12,7 +12,7 @@
 
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { DestatisApiError, DestatisParseError } from "./errors.js";
+import { DestatisApiError, DestatisParseError, credentialsIn, redactCredentials } from "./errors.js";
 import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
@@ -188,6 +188,11 @@ function sanitizeServerText(text: string): string {
 export function redactUrl(rawUrl: string): string {
   try {
     const u = new URL(rawUrl);
+    // `user:pw@host` without a scheme parses as a URL with the scheme "user:": no
+    // userinfo, so cut the credentials out by text.
+    if (!u.username && !u.password && credentialsIn(rawUrl).length > 0) {
+      return redactCredentials(rawUrl, credentialsIn(rawUrl));
+    }
     for (const key of ["username", "password"]) {
       if (u.searchParams.has(key)) u.searchParams.set(key, "***");
     }
@@ -196,7 +201,9 @@ export function redactUrl(rawUrl: string): string {
     if (u.password) u.password = "***";
     return u.toString();
   } catch {
-    return rawUrl;
+    // A value that doesn't parse (a port typo, an unencoded "#" in the password) can
+    // still carry credentials: cut them out by text.
+    return redactCredentials(rawUrl, credentialsIn(rawUrl));
   }
 }
 

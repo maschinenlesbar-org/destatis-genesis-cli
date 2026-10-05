@@ -181,3 +181,13 @@ export const CREDENTIALS_REQUIRED_PROBLEM = "This endpoint needs an account (a t
 export function credentialsRequiredProblem(creds: { username?: string | undefined; password?: string | undefined }): string | undefined {
   return creds.username === undefined ? CREDENTIALS_REQUIRED_PROBLEM : undefined;
 }
+
+/**
+ * True when `value` (as a whole, surrounding whitespace aside) has the shape of a
+ * GENESIS API token: 32 letters and digits. The CLI uses it to keep a token typed in
+ * the wrong place (`destatis <token> logincheck`, a surplus argument) out of its
+ * messages.
+ */
+export function looksLikeToken(value: string): boolean {
+  return /^[A-Za-z0-9]{32}$/.test(value.trim());
+}

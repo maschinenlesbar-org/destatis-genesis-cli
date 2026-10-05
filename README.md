@@ -38,6 +38,9 @@ serves anonymous searches as its guest user `GAST`); `catalogue`, `metadata`,
 `data` and `logincheck` need an account. Credentials are sent exactly as given: a
 blank credential flag, or one with leading or trailing whitespace (which an HTTP
 header cannot carry), is refused with exit 2; a blank env var counts as unset.
+No message repeats a credential: the CLI prints `***` in place of the token,
+username and password (from flags or env vars) and of any `user:pass@` in a URL,
+wherever they would appear — a usage error, an unknown command, the server's echo.
 
 > **Prefer the environment variables.** A credential passed as a `--token` /
 > `--username` / `--password` **flag** is visible in the process table (`ps`,
