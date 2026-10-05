@@ -186,6 +186,11 @@ Two things the transport MUST get right (both found by live testing):
 - **Always send `Content-Length`** (even `0`) — GENESIS answers `411` to a POST
   without one.
 
+Answers are decoded by the charset their `Content-Type` names (`decodeBody`,
+`TextDecoder`; UTF-8 when none, a byte-order mark dropped); an unknown label is a
+`DestatisParseError` (P8). GENESIS declares `charset=UTF-8`; a mirror or proxy in
+ISO-8859-1 would otherwise turn every umlaut into U+FFFD.
+
 **Redirects are NOT followed.** The canonical host `genesis.destatis.de` answers
 directly; the legacy `www-genesis.destatis.de` host cross-origin-redirects (`307`)
 to it, and following that would forward the credential headers to another origin.

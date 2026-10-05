@@ -19,6 +19,7 @@ import {
   type HttpResponse,
   type Transport,
 } from "./http.js";
+import { TextDecoder } from "node:util";
 import { buildQueryString, type QueryParams } from "./query.js";
 import {
   DestatisApiError,
@@ -321,6 +322,37 @@ function otherOrigin(requested: string, actual: string): boolean {
   }
 }
 
+/** The charset a Content-Type names, or undefined when it names none. */
+function charsetOf(contentType: string): string | undefined {
+  return /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
+}
+
+/**
+ * Decode a response body by the charset its Content-Type names (UTF-8 when it names
+ * none; a byte-order mark is dropped). GENESIS declares `charset=UTF-8`, but a mirror
+ * or proxy answering in ISO-8859-1 would otherwise turn every umlaut into U+FFFD. An
+ * unknown charset label is a `DestatisParseError`.
+ */
+function decodeBody(body: Buffer, contentType: string, path: string): string {
+  const charset = charsetOf(contentType) ?? "utf-8";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(charset);
+  } catch {
+    throw new DestatisParseError(`Unsupported response charset "${sanitizeServerText(charset)}" from ${path}.`);
+  }
+  return decoder.decode(body);
+}
+
+/** decodeBody for error text: an unknown charset falls back to UTF-8 rather than hide the error. */
+function decodeErrorBody(body: Buffer, contentType: string): string {
+  try {
+    return decodeBody(body, contentType, "");
+  } catch {
+    return body.toString("utf8");
+  }
+}
+
 /** What the error paths of one request need to know about its credentials. */
 interface RequestContext {
   /** See `credentialsSent`. */
@@ -596,7 +628,7 @@ export class RequestEngine {
       // to stderr by renderRaw, so strip any embedded terminal control chars.
       const contentType = sanitizeServerText(String(responseHeaders["content-type"] ?? ""));
       if (status < 200 || status >= 300) {
-        throw this.toApiError(method, url, status, responseBody, ctx, retryNote);
+        throw this.toApiError(method, url, status, responseBody, ctx, retryNote, contentType);
       }
 
       return { data: responseBody, contentType, status };
@@ -647,7 +679,8 @@ export class RequestEngine {
     }
     const jsonType = /json/i.test(res.contentType);
     const ctx = contextOf(authHeaders);
-    const raw = res.data.toString("utf8");
+    // A body labelled JSON is decoded by its charset; anything else is only sniffed.
+    const raw = jsonType ? decodeBody(res.data, res.contentType, path) : res.data.toString("utf8");
     if (!jsonType && !raw.trimStart().startsWith("{")) return res;
 
     let parsed: unknown;
@@ -690,7 +723,7 @@ export class RequestEngine {
     res: RawResponse,
     ctx: RequestContext,
   ): T {
-    const text = res.data.toString("utf8");
+    const text = decodeBody(res.data, res.contentType, path);
     // Every GENESIS endpoint answers with a JSON body (the envelope, or the
     // helloworld objects); an empty 200 or a 204 is a broken response, not a
     // result — returning null would print "null" with exit 0.
@@ -774,10 +807,11 @@ export class RequestEngine {
     body: Buffer,
     ctx: RequestContext,
     note?: string,
+    contentType = "",
   ): DestatisApiError {
     const sent = ctx.sent;
     // Scrubbed first: everything below (detail, statusType, body) derives from it.
-    const text = scrub(body.toString("utf8"), ctx);
+    const text = scrub(decodeErrorBody(body, contentType), ctx);
     let detail: string | undefined;
     let code: number | undefined;
     let statusType: string | undefined;
