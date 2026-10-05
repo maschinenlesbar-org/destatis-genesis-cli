@@ -85,7 +85,10 @@ const table = await genesis.data.table("12411-0001", { startyear: "2020" });
 
 The client is usable independently of the CLI. Errors are typed
 (`DestatisApiError`, `DestatisNetworkError`, `DestatisParseError`,
-`DestatisUsageError`).
+`DestatisUsageError`). A custom `transport` (e.g. one built on `fetch`) gets the
+same guarantees as the built-in one: `timeoutMs` and `maxResponseBytes` are enforced
+by the client, a `Headers` object or `Uint8Array` body is read correctly, and
+whatever the transport throws arrives as a `DestatisNetworkError`.
 
 ## Notes
 

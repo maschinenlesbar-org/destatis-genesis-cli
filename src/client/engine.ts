@@ -10,11 +10,20 @@
 // style is no longer honoured by the server (it 302-redirects to an announcement
 // page). Only `helloworld/whoami` is an unauthenticated GET.
 
-import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
+import {
+  MAX_TIMEOUT_MS,
+  nodeHttpTransport,
+  sizeLimitMessage,
+  timeoutMessage,
+  type HttpRequest,
+  type HttpResponse,
+  type Transport,
+} from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
 import {
   DestatisApiError,
   DestatisError,
+  DestatisNetworkError,
   DestatisParseError,
   credentialsIn,
   redactCredentials,
@@ -51,7 +60,13 @@ export interface RawResponse {
 export interface EngineOptions {
   /** Base URL of the API. Defaults to https://genesis.destatis.de */
   baseUrl?: string;
-  /** Swappable transport. Defaults to the built-in node http/https transport. */
+  /**
+   * Swappable transport. Defaults to the built-in node http/https transport. The engine
+   * enforces `timeoutMs` and `maxResponseBytes` whatever the transport does, reads a
+   * `Headers`/`Map` or any-case header record and any `ArrayBuffer` view as the body,
+   * and turns everything a transport throws or returns malformed into a
+   * `DestatisNetworkError`.
+   */
   transport?: Transport;
   /** Value of the User-Agent header. */
   userAgent?: string;
@@ -59,7 +74,9 @@ export interface EngineOptions {
   defaultHeaders?: Record<string, string>;
   /**
    * Time limit per request in milliseconds, covering the whole response body, not
-   * only idle gaps (0 disables; at most MAX_TIMEOUT_MS, 2^31 - 1 ms).
+   * only idle gaps (0 disables; at most MAX_TIMEOUT_MS, 2^31 - 1 ms). Enforced by the
+   * engine for every transport: the request's `signal` is aborted at the deadline and
+   * the call rejects with a `DestatisNetworkError`.
    */
   timeoutMs?: number;
   /**
@@ -77,7 +94,8 @@ export interface EngineOptions {
   /**
    * Hard cap on response body size in bytes (defends against memory exhaustion
    * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit;
-   * at most `Number.MAX_SAFE_INTEGER`.
+   * at most `Number.MAX_SAFE_INTEGER`. The default transport stops reading at the cap;
+   * for any other the engine checks the body it gets back.
    */
   maxResponseBytes?: number;
   /** Injectable sleep, primarily for deterministic tests. */
@@ -237,6 +255,60 @@ function credentialsSent(authHeaders: Record<string, string> | undefined): boole
   return authHeaders === undefined ? undefined : Object.keys(authHeaders).length > 0;
 }
 
+/**
+ * Why a transport's resolved value is not a usable HttpResponse, or `undefined` when
+ * it is. An injected transport may resolve with anything; a malformed one would
+ * otherwise surface as a raw TypeError, outside the DestatisError contract.
+ */
+function responseProblem(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return "not an object";
+  const r = value as Partial<Record<"status" | "headers" | "body", unknown>>;
+  if (typeof r.status !== "number" || !Number.isInteger(r.status) || r.status < 100 || r.status > 599) {
+    return "status is not an HTTP status code";
+  }
+  if (typeof r.headers !== "object" || r.headers === null || Array.isArray(r.headers)) return "headers is not an object";
+  if (bodyBytes(r.body) === undefined) return "body is not a Buffer, Uint8Array, other ArrayBuffer view or ArrayBuffer";
+  return undefined;
+}
+
+/**
+ * The response body as a Buffer (a view, no copy): a Buffer, any ArrayBuffer view (a
+ * Uint8Array from fetch, a DataView) or an ArrayBuffer/SharedArrayBuffer — checked by
+ * internal slot, not `instanceof`, so a value from another realm (a vm context, a Jest
+ * test) counts. Undefined for anything else.
+ */
+function bodyBytes(value: unknown): Buffer | undefined {
+  if (Buffer.isBuffer(value)) return value;
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  const tag = Object.prototype.toString.call(value);
+  if (tag === "[object ArrayBuffer]" || tag === "[object SharedArrayBuffer]") return Buffer.from(value as ArrayBuffer);
+  return undefined;
+}
+
+/**
+ * The response headers as a plain record with lower-case names. A transport built on
+ * `fetch` naturally returns its `Headers` object, which passes as an object but has no
+ * plain properties: the engine then saw no Retry-After and no Content-Type at all. Such
+ * an object (anything with `get` and `forEach`, a `Map` too) is copied into a record; a
+ * plain record gets its names lower-cased, as the engine reads them.
+ */
+function plainHeaders(headers: object): Record<string, string | string[] | undefined> {
+  const h = headers as { get?: unknown; forEach?: unknown };
+  if (typeof h.get === "function" && typeof h.forEach === "function") {
+    const record: Record<string, string> = {};
+    (h.forEach as (cb: (value: unknown, name: unknown) => void) => void).call(headers, (value, name) => {
+      record[String(name).toLowerCase()] = String(value);
+    });
+    return record;
+  }
+  // Node's transport lower-cases header names; a custom one may not ("Content-Type").
+  const record: Record<string, string | string[] | undefined> = {};
+  for (const [name, value] of Object.entries(headers as Record<string, string | string[] | undefined>)) {
+    record[name.toLowerCase()] = value;
+  }
+  return record;
+}
+
 /** What the error paths of one request need to know about its credentials. */
 interface RequestContext {
   /** See `credentialsSent`. */
@@ -372,6 +444,32 @@ export class RequestEngine {
     this.sleep = options.sleep ?? realSleep;
   }
 
+  /**
+   * Call the transport under the overall deadline (`timeoutMs`): the request gets an
+   * AbortSignal that fires at the deadline, and the call rejects then whether the
+   * transport stops or not — a custom transport (fetch, a node:http wrapper) that
+   * ignores `timeoutMs` can't hang the caller. A synchronous throw becomes a rejection.
+   */
+  private async callTransport(request: HttpRequest): Promise<HttpResponse> {
+    const call = (signal?: AbortSignal): Promise<HttpResponse> =>
+      Promise.resolve().then(() => this.transport(signal === undefined ? request : { ...request, signal }));
+    if (this.timeoutMs === 0) return call();
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new DestatisNetworkError(timeoutMessage(this.timeoutMs));
+        controller.abort(err);
+        reject(err);
+      }, this.timeoutMs);
+    });
+    try {
+      return await Promise.race([call(controller.signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** Build a fully-qualified URL from a path (parameters travel in the body). */
   buildUrl(path: string): string {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -413,9 +511,9 @@ export class RequestEngine {
     const ctx = contextOf(options.authHeaders);
     let attempt = 0;
     for (;;) {
-      let response: Awaited<ReturnType<Transport>>;
+      let response: HttpResponse;
       try {
-        response = await this.transport({
+        response = await this.callTransport({
           method,
           url,
           headers,
@@ -424,16 +522,38 @@ export class RequestEngine {
           ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
         });
       } catch (cause) {
-        // A transport's message may quote the request, headers included.
-        throw scrubThrown(cause, ctx);
+        // A transport's message may quote the request, headers included, so it is
+        // scrubbed. The default transport rejects with DestatisNetworkError only; an
+        // injected one may throw anything (fetch's TypeError, a string, null). Keep the
+        // library's error contract for both: every failure is a DestatisError. Resets
+        // are not retried (only 429/503 are, see Usage.md).
+        const clean = scrubThrown(cause, ctx);
+        if (clean instanceof DestatisError) throw clean;
+        const reason = clean instanceof Error ? clean.message : String(clean);
+        throw new DestatisNetworkError(`${method} ${redactUrl(url)} failed: ${sanitizeServerText(reason)}`, {
+          cause: clean,
+        });
       }
 
+      const invalid = responseProblem(response);
+      if (invalid !== undefined) {
+        throw new DestatisNetworkError(
+          `${method} ${redactUrl(url)} failed: the transport returned an invalid response (${invalid}).`,
+        );
+      }
       const status = response.status;
+      const responseHeaders = plainHeaders(response.headers);
+      const responseBody = bodyBytes(response.body) as Buffer;
+      // The size cap holds whatever the transport did: the default one aborts early, a
+      // custom one may have read everything.
+      if (this.maxResponseBytes > 0 && responseBody.byteLength > this.maxResponseBytes) {
+        throw new DestatisNetworkError(`${method} ${redactUrl(url)} failed: ${sizeLimitMessage(this.maxResponseBytes)}`);
+      }
       const retryable = status === 429 || status === 503;
       if (retryable && attempt < this.maxRetries) {
         // Honour Retry-After; without a usable one, back off linearly. A Retry-After
         // beyond MAX_RETRY_AFTER_MS is not retried: the error below surfaces at once.
-        const retryAfter = parseRetryAfter(response.headers["retry-after"]);
+        const retryAfter = parseRetryAfter(responseHeaders["retry-after"]);
         if (retryAfter === undefined || retryAfter <= MAX_RETRY_AFTER_MS) {
           attempt += 1;
           await this.sleep(retryAfter ?? this.retryDelayMs * attempt);
@@ -443,12 +563,12 @@ export class RequestEngine {
 
       // Sanitize the server-controlled Content-Type at the source: it is echoed
       // to stderr by renderRaw, so strip any embedded terminal control chars.
-      const contentType = sanitizeServerText(String(response.headers["content-type"] ?? ""));
+      const contentType = sanitizeServerText(String(responseHeaders["content-type"] ?? ""));
       if (status < 200 || status >= 300) {
-        throw this.toApiError(method, url, status, response.body, ctx);
+        throw this.toApiError(method, url, status, responseBody, ctx);
       }
 
-      return { data: response.body, contentType, status };
+      return { data: responseBody, contentType, status };
     }
   }
 

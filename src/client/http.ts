@@ -21,8 +21,22 @@ export interface HttpRequest {
   timeoutMs?: number;
   /** Hard cap on the response body size in bytes; the request aborts if exceeded. */
   maxResponseBytes?: number;
+  /**
+   * Aborted when the engine's overall deadline (`timeoutMs`) passes. A transport should
+   * stop the request then (`fetch(url, { signal })`); the engine rejects at the deadline
+   * either way, and enforces `maxResponseBytes` on the body it gets back, so neither
+   * limit depends on the transport.
+   */
+  signal?: AbortSignal;
 }
 
+/**
+ * What a transport resolves with. The engine is lenient about what a custom transport
+ * hands back: `headers` may also be a `Headers` object or a `Map`, with names in any
+ * case, and `body` any `ArrayBuffer` view (fetch's `Uint8Array`) or an `ArrayBuffer`.
+ * Anything else — no status, a status outside 100–599, no headers, a string body — is
+ * a `DestatisNetworkError`.
+ */
 export interface HttpResponse {
   status: number;
   headers: http.IncomingHttpHeaders;
@@ -30,6 +44,16 @@ export interface HttpResponse {
 }
 
 export type Transport = (request: HttpRequest) => Promise<HttpResponse>;
+
+/** The message for a body over the size cap, naming the option on both sides. */
+export function sizeLimitMessage(maxBytes: number): string {
+  return `Response exceeded the size limit of ${maxBytes} bytes (maxResponseBytes; --max-response-bytes on the CLI)`;
+}
+
+/** The message for a request that ran past `timeoutMs`. */
+export function timeoutMessage(timeoutMs: number): string {
+  return `Request timed out after ${timeoutMs}ms`;
+}
 
 /**
  * The longest delay Node's timers support (2^31 - 1 ms, about 24.8 days). A longer one
@@ -97,7 +121,7 @@ export const nodeHttpTransport: Transport = (request) =>
             if (maxBytes !== undefined && received > maxBytes) {
               aborted = true;
               res.destroy();
-              fail(new DestatisNetworkError(`Response exceeded maxResponseBytes (${maxBytes})`));
+              fail(new DestatisNetworkError(sizeLimitMessage(maxBytes)));
               return;
             }
             chunks.push(chunk);
@@ -125,10 +149,23 @@ export const nodeHttpTransport: Transport = (request) =>
     if (request.timeoutMs && request.timeoutMs > 0) {
       const timeoutMs = request.timeoutMs;
       timer = setTimeout(() => {
-        const err = new DestatisNetworkError(`Request timed out after ${timeoutMs}ms`);
+        const err = new DestatisNetworkError(timeoutMessage(timeoutMs));
         fail(err);
         req.destroy(err);
       }, Math.min(timeoutMs, MAX_TIMEOUT_MS));
+    }
+
+    if (request.signal !== undefined) {
+      const signal = request.signal;
+      const abort = (): void => {
+        const reason: unknown = signal.reason;
+        const err =
+          reason instanceof DestatisNetworkError ? reason : new DestatisNetworkError(timeoutMessage(request.timeoutMs ?? 0));
+        fail(err);
+        req.destroy(err);
+      };
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
     }
 
     req.on("error", (err) => {

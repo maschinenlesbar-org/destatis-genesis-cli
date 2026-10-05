@@ -151,7 +151,7 @@ not sent — by the CLI or the library — and GENESIS applies its own defaults
 ## GENESIS-specific divergences
 
 The GENESIS API differs from most sibling repos in four ways an editor must
-preserve:
+preserve (§5 is the library's side of the transport seam):
 
 ### 1. Auth is POST with credentials in HTTP header fields
 
@@ -248,6 +248,27 @@ Large results come back with `Status.Code 98`. The full flow (re-issue with
 The engine turns a `98` into a clear error telling the user to narrow the
 selection. A future `--job` sub-flow (gated on username+password) is the natural
 extension point.
+
+### 5. The transport contract is the engine's, not the transport's
+
+`Transport` is exported, so library users plug in `fetch` or their own `node:http`
+wrapper. The engine (`request()`/`callTransport()` in `engine.ts`) keeps its promises
+for every transport (P5):
+
+- **`timeoutMs`** — the call runs under an overall deadline: the request carries an
+  `AbortSignal` (`HttpRequest.signal`, which the default transport honours and a fetch
+  transport passes on) and the engine rejects with `DestatisNetworkError` at the
+  deadline whether the transport stops or not.
+- **`maxResponseBytes`** — checked again on the body the transport hands back
+  (`sizeLimitMessage` names the option and `--max-response-bytes`).
+- **Response shape** — `headers` may be a `Headers` object, a `Map` or a record with
+  names in any case (`plainHeaders`), so `Retry-After` and `Content-Type` are read;
+  `body` may be any `ArrayBuffer` view or `ArrayBuffer`, from any realm (`bodyBytes`).
+  Anything else (`responseProblem`: no status, no headers, a string body) is a
+  `DestatisNetworkError`.
+- **Errors** — whatever a transport throws (fetch's `TypeError`, a string, `null`)
+  becomes a `DestatisNetworkError` naming the request, with the original (scrubbed)
+  as `cause`. A reset is not retried, from any transport: only 429/503 are.
 
 ## Conventions matched from the blueprint
 
