@@ -309,6 +309,18 @@ function plainHeaders(headers: object): Record<string, string | string[] | undef
   return record;
 }
 
+/**
+ * True when `actual` is on another origin (scheme, host, port) than `requested`, or
+ * doesn't parse — the credential headers must not have gone there.
+ */
+function otherOrigin(requested: string, actual: string): boolean {
+  try {
+    return new URL(actual, requested).origin !== new URL(requested).origin;
+  } catch {
+    return true;
+  }
+}
+
 /** What the error paths of one request need to know about its credentials. */
 interface RequestContext {
   /** See `credentialsSent`. */
@@ -516,6 +528,7 @@ export class RequestEngine {
         response = await this.callTransport({
           method,
           url,
+          redirect: "manual",
           headers,
           ...(body !== undefined ? { body } : {}),
           timeoutMs: this.timeoutMs,
@@ -539,6 +552,16 @@ export class RequestEngine {
       if (invalid !== undefined) {
         throw new DestatisNetworkError(
           `${method} ${redactUrl(url)} failed: the transport returned an invalid response (${invalid}).`,
+        );
+      }
+      // A transport that followed a redirect anyway (fetch's default) has already sent
+      // the credential headers on; at least don't hand back the other host's answer.
+      const finalUrl = (response as { url?: unknown }).url;
+      if (typeof finalUrl === "string" && finalUrl !== "" && otherOrigin(url, finalUrl)) {
+        throw new DestatisNetworkError(
+          `${method} ${redactUrl(url)} failed: the transport followed a redirect to another origin ` +
+            `(${sanitizeServerText(redactUrl(finalUrl))}); transports must not follow redirects ` +
+            `(HttpRequest.redirect is "manual") — use the canonical host (default https://genesis.destatis.de)`,
         );
       }
       const status = response.status;

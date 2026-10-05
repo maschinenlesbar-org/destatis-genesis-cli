@@ -88,7 +88,10 @@ The client is usable independently of the CLI. Errors are typed
 `DestatisUsageError`). A custom `transport` (e.g. one built on `fetch`) gets the
 same guarantees as the built-in one: `timeoutMs` and `maxResponseBytes` are enforced
 by the client, a `Headers` object or `Uint8Array` body is read correctly, and
-whatever the transport throws arrives as a `DestatisNetworkError`.
+whatever the transport throws arrives as a `DestatisNetworkError`. A transport must
+not follow redirects — GENESIS credentials are headers that `fetch` would carry to
+another host — so pass `redirect: req.redirect` (always `"manual"`) to `fetch`, and
+return `url: r.url`: a response from another origin is then refused.
 
 ## Notes
 

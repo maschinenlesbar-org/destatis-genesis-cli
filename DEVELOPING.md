@@ -189,7 +189,14 @@ Two things the transport MUST get right (both found by live testing):
 **Redirects are NOT followed.** The canonical host `genesis.destatis.de` answers
 directly; the legacy `www-genesis.destatis.de` host cross-origin-redirects (`307`)
 to it, and following that would forward the credential headers to another origin.
-A 3xx therefore surfaces as an error hinting at the canonical host.
+A 3xx therefore surfaces as an error hinting at the canonical host. That has to hold
+for custom transports too (P3): `fetch` follows redirects by default and strips only
+`Authorization` across origins, not the custom `username`/`password` headers. So every
+`HttpRequest` carries `redirect: "manual"` (a fetch transport passes it on), and a
+response whose reported final URL (`HttpResponse.url`, fetch's `r.url`) is on another
+origin is rejected as a `DestatisNetworkError` instead of being returned as data.
+`test/redirect-credentials.test.ts` runs a pair of local servers, one redirecting to the
+other, and checks that the second receives nothing.
 `engine.ts:redactUrl` additionally scrubs any `username`/`password` that a caller
 managed to put in a URL (defensive — this client keeps them in headers).
 
