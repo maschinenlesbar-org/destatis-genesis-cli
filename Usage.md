@@ -51,7 +51,8 @@ user `GAST` (credentials are sent when configured). Without `--category` no
 category is sent and GENESIS searches every object type. `--pagelength` bounds the
 result count. Returns parallel arrays
 (`Tables`/`Statistics`/`Cubes`/`Timeseries`/`Variables`), each `null` when not
-searched.
+searched or when nothing of that type matched: a search without hits answers
+`Status.Code 0` with its arrays `null` (not `104`), exit 0.
 
 ```bash
 destatis find "Bevölkerung" --category tables --pagelength 20
@@ -150,7 +151,8 @@ A reader that stops early (`destatis find … | head`) ends the run quietly with
 > **A missing object code does not exit 4.** Looking up a code that does not exist
 > on `metadata`/`data` returns `Status.Code 104` ("Es gibt keine Objekte zum
 > angegebenen Selektionskriterium") — a valid **empty** result, so the CLI exits
-> **0**, the same as an empty `catalogue`/`find` search. (A `data <kind>file`
+> **0**, the same as an empty `catalogue` search. (An empty `find` answers
+> `Status.Code 0` with its arrays `null` instead.) (A `data <kind>file`
 > download is the exception: there `104` means there is nothing to download, so it
 > exits **4** and writes no file.) The `90 → 4` mapping is a
 > defensive path the server rarely takes. To detect "no such object" in a script,

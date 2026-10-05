@@ -45,8 +45,8 @@ destatis --compact find "Bevölkerung" --category tables --pagelength 20
   `time-series`. Start with `tables` (the usable 2-D views); widen to `all` if
   nothing fits.
 - `find` returns **parallel arrays** `Tables` / `Statistics` / `Cubes` /
-  `Timeseries` / `Variables`, each `null` when not searched. Read the array that
-  matches your category.
+  `Timeseries` / `Variables`, each `null` when that type was not searched **or
+  nothing of that type matched**. Read the array that matches your category.
 
 Each item: `Code` (the EVAS code you want) and `Content` (its German title).
 
@@ -91,11 +91,13 @@ Match: table 12411-0001 — "Bevölkerung: Deutschland, Stichtag"
 
 ## Traps
 
-- **Empty result ≠ error.** A search/catalogue with no matches comes back with
-  `Status.Code 104` and exits `0` (an empty list) — it means "nothing matched",
-  not a failure. Broaden the term or category.
-- **`find` arrays can be `null`.** Don't assume every array is present; read the
-  one for your `--category`.
+- **Empty result ≠ error.** A `find` with no matches answers `Status.Code 0`
+  ("erfolgreich") with the array for your category `null` — not `104`, and not an
+  empty list. A `catalogue` with no matches answers `Status.Code 104` with an empty
+  list. Both exit `0`: "nothing matched", not a failure. Broaden the term or
+  category.
+- **`find` arrays can be `null`.** Don't assume every array is present; a `null`
+  array for your `--category` means no hits of that type.
 - **A wrong code is not an error.** `metadata` on a code that does not exist
   exits `0` with `Status.Code 104` and no `Object` — check `Status.Code` before
   handing a code off.
