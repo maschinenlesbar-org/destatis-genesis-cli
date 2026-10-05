@@ -5,7 +5,8 @@
 // DestatisValidationError, since GENESIS reads an empty parameter as "no
 // filter". The enumerated parameters (language, category, the criteria, format) must be
 // one of the values exported below; pagelength is an integer from 1 to
-// MAX_PAGELENGTH and timeslices a non-negative integer. Valid values are sent as-is, never trimmed.
+// MAX_PAGELENGTH and timeslices a non-negative integer. Valid values are sent as-is, never
+// trimmed — only normalised to Unicode NFC, which GENESIS matches.
 
 /** Most results a list request may ask for (`pagelength`, the server's maximum). */
 export const MAX_PAGELENGTH = 25000;
