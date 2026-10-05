@@ -141,6 +141,10 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 | `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command) |
 | `4` | object not found — the rare `Status.Code 90` / a bare HTTP 404 (see note), and a `data <kind>file` download for a code that does not exist (`Status.Code 104`) |
 
+A reader that stops early (`destatis find … | head`) ends the run quietly with exit
+`0`; a failed run keeps its own code even when its stderr reader is gone
+(`2>&1 | true`).
+
 > **A missing object code does not exit 4.** Looking up a code that does not exist
 > on `metadata`/`data` returns `Status.Code 104` ("Es gibt keine Objekte zum
 > angegebenen Selektionskriterium") — a valid **empty** result, so the CLI exits
