@@ -12,15 +12,14 @@ import { MAX_TIMEOUT_MS } from "../client/http.js";
 import { MAX_RETRIES } from "../client/engine.js";
 import { LANGUAGES, MAX_PAGELENGTH } from "../client/params.js";
 import {
+  CREDENTIAL_ENV_VARS,
   parseIntArg,
   parseBoundedInt,
-  parseCredential,
   parseHeaderValue,
   parseSecret,
   parseNonEmpty,
   parseBaseUrl,
 } from "./shared.js";
-import { DestatisUsageError } from "../client/errors.js";
 import { registerHelloCommands } from "./commands/hello.js";
 import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
@@ -53,28 +52,19 @@ export const defaultDeps: CliDeps = {
 };
 
 /**
- * Read a credential env var and validate it like the matching flag. A missing,
- * empty, or whitespace-only value is treated as unset (returns undefined) so it
- * never seeds a blank credential; any other value is used exactly as set (never
- * trimmed into a different credential).
+ * Read a credential env var. A missing, empty, or whitespace-only value is treated
+ * as unset (returns undefined) so it never seeds a blank credential; any other value
+ * is used exactly as set (never trimmed into a different credential).
  *
- * Env values are seeded via setOptionValue, which does NOT run commander's
- * value-parsers, so an env credential otherwise skips the check that flag values
- * get. Run it through parseCredential here and re-raise a rejection (control
- * characters, characters above U+00FF, leading/trailing whitespace) as a typed
- * usage error (exit 2) naming the variable — never its value — instead of letting
- * it reach Node's HTTP layer as an opaque ERR_INVALID_CHAR "Unexpected error".
+ * The value is NOT validated here: help, `--version` and `hello` must work whatever
+ * the variable holds, and a flag may override it. `action()` checks the values a
+ * command actually uses (`checkEnvCredentials` in shared.ts).
  */
 function readEnv(env: Record<string, string | undefined>, name: string): string | undefined {
   const raw = env[name];
   if (typeof raw !== "string") return undefined;
   if (raw.trim().length === 0) return undefined;
-  try {
-    return parseCredential(raw);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : "Value is not a valid header value.";
-    throw new DestatisUsageError(reason.replace(/^Value/, `Environment variable ${name}`));
-  }
+  return raw;
 }
 
 export function buildProgram(deps: CliDeps = defaultDeps): Command {
@@ -126,16 +116,15 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .option("--force", "overwrite the --output file if it already exists")
     .showHelpAfterError();
 
-  // Seed each credential flag from its env var (blank treated as unset).
-  // commander treats these as the option's value, which an explicit flag on the
-  // command line overrides during parse: flag > env var > unset, per field.
+  // Seed each credential flag from its env var (blank treated as unset), with the
+  // value source "env". commander treats these as the option's value, which an
+  // explicit flag on the command line overrides during parse (source "cli"):
+  // flag > env var > unset, per field.
   const env = deps.env ?? process.env;
-  const tokenEnv = readEnv(env, "DESTATIS_API_TOKEN");
-  const userEnv = readEnv(env, "DESTATIS_USERNAME");
-  const passEnv = readEnv(env, "DESTATIS_PASSWORD");
-  if (tokenEnv !== undefined) program.setOptionValue("token", tokenEnv);
-  if (userEnv !== undefined) program.setOptionValue("username", userEnv);
-  if (passEnv !== undefined) program.setOptionValue("password", passEnv);
+  for (const [key, name] of Object.entries(CREDENTIAL_ENV_VARS)) {
+    const value = readEnv(env, name);
+    if (value !== undefined) program.setOptionValueWithSource(key, value, "env");
+  }
 
   registerHelloCommands(program, deps);
   registerFindCommand(program, deps);

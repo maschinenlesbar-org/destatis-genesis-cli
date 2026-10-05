@@ -23,7 +23,7 @@ src/
     io.ts        # injectable I/O + env seam (CliDeps / CliIO)
     shared.ts    # option parsers, credential resolution, option->client mapping, render
     commands/    # hello, find, catalogue, metadata, data
-    program.ts   # assembles the commander program; seeds credential flags from env
+    program.ts   # assembles the commander program; seeds credential flags from env (unchecked)
     run.ts       # argv -> exit code (no process.exit; testable)
     index.ts     # #! bin shim
   index.ts       # library entry
@@ -82,7 +82,14 @@ What the library rejects:
   does a blank credential env var in the CLI; only a blank credential *flag* is a
   CLI usage error, because it would silently cancel an env credential. Messages
   never echo the value. The CLI's `parseHeaderValue`/`parseCredential` (and the
-  env-var check in `program.ts`) call the same rules; the secret flags use
+  env-var check, `checkEnvCredentials` in `shared.ts`) call the same rules. A
+  credential variable is checked only when a command uses its value (P19):
+  `program.ts` seeds it unchecked (value source `env`), and `action()` checks what
+  `resolveCredentials` picked, so `--help`, `--version`, `help` and `hello` (which
+  sends no credentials, `action(…, { credentials: false })`) never fail on it, and
+  neither does a run whose flag overrides it. `find` does use configured
+  credentials, so a malformed variable still stops it rather than silently
+  searching as the guest user. The secret flags use
   `parseSecret`, which throws `DestatisUsageError` naming the flag and the reason
   only (commander's own wording, `argument '<value>' is invalid`, would print the
   password).

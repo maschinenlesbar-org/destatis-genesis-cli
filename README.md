@@ -37,7 +37,9 @@ used. `destatis hello` and `destatis find` work without credentials (GENESIS
 serves anonymous searches as its guest user `GAST`); `catalogue`, `metadata`,
 `data` and `logincheck` need an account. Credentials are sent exactly as given: a
 blank credential flag, or one with leading or trailing whitespace (which an HTTP
-header cannot carry), is refused with exit 2; a blank env var counts as unset.
+header cannot carry), is refused with exit 2; a blank env var counts as unset. A
+malformed variable fails only a command that uses it: `--help`, `--version` and
+`destatis hello` always work, and a flag overrides the variable.
 No message repeats a credential: the CLI prints `***` in place of the token,
 username and password (from flags or env vars) and of any `user:pass@` in a URL,
 wherever they would appear — a usage error, an unknown command, the server's echo.

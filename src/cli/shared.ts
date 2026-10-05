@@ -176,6 +176,35 @@ export function resolveCredentials(
   };
 }
 
+/** The environment variable each credential option is seeded from (program.ts). */
+export const CREDENTIAL_ENV_VARS = {
+  token: "DESTATIS_API_TOKEN",
+  username: "DESTATIS_USERNAME",
+  password: "DESTATIS_PASSWORD",
+} as const;
+
+/**
+ * Check the credential values a command is about to use that came from an
+ * environment variable. Env values are seeded via setOptionValueWithSource, which
+ * does NOT run commander's value-parsers, so they are checked here, with the
+ * library's `credentialProblem`, and only when used: help, `--version` and `hello`
+ * never fail on a variable, and neither does a run whose flag overrides it (flag >
+ * env var). A rejection (control characters, characters above U+00FF,
+ * leading/trailing whitespace) is a usage error (exit 2) naming the variable —
+ * never its value — instead of reaching Node's HTTP layer as an opaque
+ * ERR_INVALID_CHAR "Unexpected error".
+ */
+export function checkEnvCredentials(creds: ResolvedCredentials, sources: Record<keyof typeof CREDENTIAL_ENV_VARS, string | undefined>): void {
+  for (const key of ["token", "username", "password"] as const) {
+    const value = creds[key];
+    if (value === undefined || sources[key] !== "env") continue;
+    const reason = credentialProblem(value);
+    if (reason !== undefined) {
+      throw new DestatisUsageError(reason.replace(/^Value/, `Environment variable ${CREDENTIAL_ENV_VARS[key]}`));
+    }
+  }
+}
+
 /**
  * Build the client, rewording the library's credential-pair error with the
  * flags and env vars that supply the pair.
@@ -388,17 +417,32 @@ async function withCredentialsHint(body: () => Promise<void>): Promise<void> {
 export function action(
   deps: CliDeps,
   fn: (ctx: ActionContext, positionals: string[]) => Promise<void>,
+  options: { credentials?: boolean } = {},
 ): (...args: unknown[]) => Promise<void> {
   return async (...args: unknown[]) => {
     const command = args[args.length - 1] as Command;
     const positionals = args.slice(0, Math.max(0, args.length - 2)) as string[];
     const global = command.optsWithGlobals() as GlobalOptions;
+    // A command that sends no credentials (`hello`) neither reads nor checks them, so
+    // a malformed or half-set variable can't stop it.
+    if (options.credentials === false) {
+      const client = deps.createClient(toClientOptions(global, { present: false }));
+      warnArgvCredentials(deps, command);
+      await fn({ client, global, opts: command.opts() }, positionals);
+      return;
+    }
     const root = rootCommand(command);
+    const sources = {
+      token: root.getOptionValueSource("token"),
+      username: root.getOptionValueSource("username"),
+      password: root.getOptionValueSource("password"),
+    };
     const creds = resolveCredentials(global, {
-      token: root.getOptionValueSource("token") === "cli",
-      username: root.getOptionValueSource("username") === "cli",
-      password: root.getOptionValueSource("password") === "cli",
+      token: sources.token === "cli",
+      username: sources.username === "cli",
+      password: sources.password === "cli",
     });
+    checkEnvCredentials(creds, sources);
     // A half username/password pair gets the library's pair error, reworded.
     const client = createClient(deps, toClientOptions(global, creds));
     if (creds.present) warnArgvCredentials(deps, command);
