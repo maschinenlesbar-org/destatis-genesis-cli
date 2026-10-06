@@ -77,8 +77,8 @@ destatis data tablefile 12411-0001 --format ffcsv -o pop.zip
 ```
 
 Every command prints the API's JSON envelope (including the `Copyright`
-attribution and a `Status` object). See **[Usage.md](Usage.md)** for the full
-command reference and **[GLOSSARY.md](GLOSSARY.md)** for GENESIS concepts (EVAS
+attribution and a `Status` object). See **[Usage.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/Usage.md)** for the full
+command reference and **[GLOSSARY.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/GLOSSARY.md)** for GENESIS concepts (EVAS
 codes, cubes, `selection` wildcards, `Status.Code` values).
 
 ## Library use
@@ -111,7 +111,7 @@ return `url: r.url`: a response from another origin is then refused.
 
 - **HTTP 200 ≠ success.** GENESIS reports logical outcomes in a `Status` object in
   the body; this client inspects `Status.Code` and raises `DestatisApiError` for
-  real errors (see [DEVELOPING.md](DEVELOPING.md)).
+  real errors (see [DEVELOPING.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/DEVELOPING.md)).
 - **The data is Destatis's, not ours** — governed by DL-DE-BY-2.0. See
   **[DATA_LICENSE.md](DATA_LICENSE.md)**.
 - **Code license:** AGPL-3.0-or-later **OR** commercial — see
@@ -120,7 +120,7 @@ return `url: r.url`: a response from another origin is then refused.
 
 ## Claude Code skills
 
-Three [Agent Skills](SKILLS.md) teach Claude Code to use this CLI for real questions:
+Three [Agent Skills](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/SKILLS.md) teach Claude Code to use this CLI for real questions:
 turn a topic into a GENESIS object code (**destatis-statistics-finder**), fetch and decode its
 numbers (**destatis-data-fetch**), and export tables to CSV or Excel
 (**destatis-table-download**). Install them from the maschinenlesbar.org marketplace:
@@ -130,7 +130,7 @@ numbers (**destatis-data-fetch**), and export tables to CSV or Excel
 /plugin install destatis-genesis@maschinenlesbar
 ```
 
-See **[SKILLS.md](SKILLS.md)** for details.
+See **[SKILLS.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/SKILLS.md)** for details.
 
 ## Development
 
@@ -141,4 +141,4 @@ npm test           # builds, then runs node --test on dist/test
 npm run typecheck
 ```
 
-See [DEVELOPING.md](DEVELOPING.md) for architecture and API specifics.
+See [DEVELOPING.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/DEVELOPING.md) for architecture and API specifics.

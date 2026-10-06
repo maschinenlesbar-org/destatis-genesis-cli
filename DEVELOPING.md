@@ -373,7 +373,9 @@ Conformance tests (`test/conformance-p*.test.ts`, shared across the `*-cli` repo
 only their adapter block differs): P1 CLI redaction, P2 library redaction, P4/P19
 configuration validation, P5 transport contract, P6 retry policy, P7 pipes and exit
 codes, P8/P9/P13 responses and errors, P18 GENESIS access check, P20 the
-plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userinfo).
+plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userinfo),
+P21 README links (a relative link in `README.md` must point to a file `files` ships;
+other documents are linked by their GitHub URL, since npmjs.com shows the README).
 
 ## Verified against a live account (2026-07-03)
 
