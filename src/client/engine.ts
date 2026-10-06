@@ -898,7 +898,7 @@ export class RequestEngine {
     const url = this.buildUrl(path);
     const text = scrub(raw, ctx);
     const sent = ctx.sent;
-    this.checkLogicalStatus("POST", url, text, parsed, ctx);
+    this.checkLogicalStatus("POST", url, text, parsed, ctx, res.status);
     const s = genesisStatus(parsed);
     if (s === undefined) {
       throw new DestatisParseError(
@@ -939,7 +939,7 @@ export class RequestEngine {
     } catch (cause) {
       throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause: scrubThrown(cause, ctx) });
     }
-    this.checkLogicalStatus(method, this.buildUrl(path), scrub(text, ctx), parsed, ctx);
+    this.checkLogicalStatus(method, this.buildUrl(path), scrub(text, ctx), parsed, ctx, res.status);
     const problem = shapeProblem(parsed, shape);
     if (problem !== undefined) {
       throw new DestatisParseError(`Unexpected response from ${path}: ${problem}.`);
@@ -956,8 +956,10 @@ export class RequestEngine {
    *  - a **flat** top-level `{ Code, Content, Type }` object with no envelope at
    *    all — the authentication-failure shape (Code 15 when no credentials were
    *    sent, Code 2 for wrong credentials). The live server pairs those with
-   *    HTTP 401/404 (handled in toApiError); the flat mapping here is kept as a
-   *    defensive path should they ever arrive on a 2xx.
+   *    HTTP 401/404 (handled in toApiError); on a 2xx they are mapped here the
+   *    same way: the error carries the reply's `httpStatus` next to the code, as
+   *    a 401/404 one does, so a flat Code 2 on HTTP 200 is an auth error
+   *    (`isAuthError`) like the live 404 one.
    *
    * Throws for "object not found" (90), "too large" (98), and any error `Type`
    * (which covers the flat auth errors); returns quietly for success/warning
@@ -970,9 +972,12 @@ export class RequestEngine {
     body: string,
     parsed: unknown,
     ctx: RequestContext,
+    httpStatus: number,
   ): void {
     const s = genesisStatus(parsed);
     if (s === undefined) return;
+    // The flat shape is the status object itself (no `Status` envelope).
+    const flat = s === parsed;
     const code = statusCode(s.Code);
     // Type / Content are server-controlled and reach the terminal via the error
     // message; strip any embedded terminal control characters (and any echoed
@@ -992,6 +997,7 @@ export class RequestEngine {
         url: redactUrl(url),
         body,
         ...(sent !== undefined ? { credentialsSent: sent } : {}),
+        ...(flat ? { httpStatus } : {}),
         code,
         statusType: type,
         detail,

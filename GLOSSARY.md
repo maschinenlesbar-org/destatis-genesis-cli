@@ -62,7 +62,7 @@ envelope) on HTTP 401 or 404:
 | `90` | Fehler | requested object not found | error, **exit 4** |
 | `98` | Information | result too large for a direct fetch | error with narrowing guidance, exit 1 |
 | `15` | ERROR | not authorized: credentials missing or not recognized (flat body on HTTP 401) | error `GENESIS status 15 (ERROR) / HTTP 401` with the GENESIS text, plus a credentials hint, exit 1 |
-| `2` | ERROR | wrong username/password or token (flat body on HTTP **404**) | error `GENESIS status 2 (ERROR) / HTTP 404` with the GENESIS text, plus a credentials hint, exit 1 (a 404 carrying a GENESIS code is not "not found") |
+| `2` | ERROR | wrong username/password or token (flat body on HTTP **404**; the same flat body on an HTTP 200 counts too) | error `GENESIS status 2 (ERROR) / HTTP 404` (or `/ HTTP 200`) with the GENESIS text, plus a credentials hint, exit 1 (a 404 carrying a GENESIS code is not "not found") |
 | any | Fehler / Error | general error | error, exit 1 |
 
 ## Value-status placeholders

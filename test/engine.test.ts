@@ -94,12 +94,39 @@ test("maps the flat (envelope-less) Code 15 auth error despite HTTP 200", async 
     (err) => {
       assert.ok(err instanceof DestatisApiError);
       assert.equal(err.code, 15);
-      assert.equal(err.httpStatus, undefined);
+      // A flat status carries the reply's HTTP status, like the 401/404 auth answers.
+      assert.equal(err.httpStatus, 200);
       assert.ok(err.isAuthError);
-      assert.match(err.message, /GENESIS status 15/);
+      assert.match(err.message, /GENESIS status 15 \(ERROR\) \/ HTTP 200/);
       assert.match(err.message, /nicht berechtigt/);
       return true;
     },
+  );
+});
+
+test("a flat Code 2 on HTTP 200 is an auth error (wrong credentials), on JSON and file endpoints", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.flatBadCredentials)); // HTTP 200, no envelope
+  const e = new RequestEngine({ transport: mt.transport });
+  const isBadCredentials = (err: unknown): boolean => {
+    assert.ok(err instanceof DestatisApiError);
+    assert.equal(err.code, 2);
+    assert.equal(err.httpStatus, 200);
+    assert.ok(err.isAuthError);
+    assert.ok(!err.isNotFound);
+    assert.equal(err.credentialsSent, true);
+    assert.match(err.message, /^GENESIS status 2 \(ERROR\) \/ HTTP 200 for POST /);
+    return true;
+  };
+  await assert.rejects(() => e.postJson("/data/table", { name: "1" }, { username: "TOK" }), isBadCredentials);
+  await assert.rejects(() => e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" }), isBadCredentials);
+});
+
+test("an enveloped Code 2 on HTTP 200 stays a plain API error, not an auth error", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.envelope({}, { Code: 2, Type: "ERROR", Content: "Ein Fehler ist aufgetreten." })));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.postJson("/data/table", { name: "1" }, { username: "TOK" }),
+    (err) => err instanceof DestatisApiError && err.code === 2 && err.httpStatus === undefined && !err.isAuthError,
   );
 });
 

@@ -94,14 +94,15 @@ export class DestatisError extends Error {
  * see engine.ts). This error therefore models both worlds, together when needed:
  *
  *  - `httpStatus` is set for transport/HTTP failures (non-2xx, e.g. a gateway
- *    502 or an auth-layer 401);
+ *    502 or an auth-layer 401), and for a flat `{ Code, Content, Type }` status
+ *    on any reply, a 200 included (the auth-failure shape);
  *  - `code` is set for a GENESIS logical error, taken from `Status.Code` or the
  *    flat top-level `Code` (e.g. 90 = object not found, 98 = table too large,
  *    15 = not authorized, 2 = wrong credentials), with `statusType` the `Type`
  *    ("Fehler"/"ERROR").
  *
  * At least one of the two is always present, and both are when a non-2xx reply
- * carried a GENESIS status body; `detail` holds the human-readable message
+ * carried a GENESIS status body or a 2xx reply a flat one; `detail` holds the human-readable message
  * (`Status.Content` / `Content`, or a parsed field from an HTTP error body), cut at
  * `MAX_MESSAGE_VALUE_LENGTH` characters (the full answer is in `body`).
  */
@@ -187,9 +188,10 @@ export class DestatisApiError extends DestatisError {
 
   /**
    * True when the API rejected the credentials: the GENESIS logical code 15
-   * ("Sie sind nicht berechtigt ..." — no/unrecognized credentials), the flat
-   * code 2 on a non-2xx reply (wrong username/password or token — the live
-   * server's HTTP 404 + `{ Code: 2 }`), a transport-level 401/403, or a rejected
+   * ("Sie sind nicht berechtigt ..." — no/unrecognized credentials), code 2 in a
+   * flat status or on a non-2xx reply (wrong username/password or token — the live
+   * server's HTTP 404 + `{ Code: 2 }`, and the same flat body on an HTTP 200; the
+   * engine sets `httpStatus` for both), a transport-level 401/403, or a rejected
    * `logincheck` (`loginRejected`, live an HTTP 200 with an error text). The CLI
    * appends a credentials hint for these.
    */

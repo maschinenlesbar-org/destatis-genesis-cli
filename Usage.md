@@ -172,7 +172,9 @@ A reader that stops early (`destatis find … | head`) ends the run quietly with
 > `GENESIS status 2 (ERROR) / HTTP 404 for POST …: …Nutzernamen…`, followed by a
 > credentials hint, and exits **1**. Only a 404 without a GENESIS code exits 4.
 > `logincheck` gets the same text on an HTTP 200 instead; it exits **1** with the
-> hint too (`GENESIS login rejected (HTTP 200) …`).
+> hint too (`GENESIS login rejected (HTTP 200) …`). Should another endpoint send the
+> flat Code 2 body on an HTTP 200, it is the same auth error:
+> `GENESIS status 2 (ERROR) / HTTP 200 …`, the hint, exit **1**.
 
 ## Gotchas
 

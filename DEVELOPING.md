@@ -278,6 +278,7 @@ body on a non-2xx status. `toApiError` reads it (enveloped or flat, via
 |---|---|---|
 | `15` (not authorized / credentials not recognized) | 401 | `DestatisApiError`, `isAuthError` → credentials hint (exit 1) |
 | `2` (wrong username/password or token) | **404** | `DestatisApiError`, `isAuthError` → credentials hint (exit 1). `isNotFound` ignores a 404 that carries a GENESIS code (seen live on 2026-09-15 for both a wrong login and a wrong token) |
+| `2` or `15` | 200 | not seen live, handled the same way: `checkLogicalStatus` gives a flat status's error the reply's `httpStatus` (`GENESIS status 2 (ERROR) / HTTP 200 for …`), so `isAuthError` → credentials hint (exit 1). An *enveloped* `Status.Code 2` on a 200 stays a plain API error (exit 1, no hint) |
 
 `helloworld/logincheck` is different again (P18): it answers HTTP **200** whether
 or not the credentials are right, with a *string* `Status` and the `Username` the

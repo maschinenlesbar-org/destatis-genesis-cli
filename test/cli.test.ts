@@ -674,3 +674,12 @@ test("P20: a usage error does not warn about http", async () => {
   assert.equal(code, 2);
   assert.deepEqual(cli.err.filter((l) => l.startsWith("warning: ")), []);
 });
+
+test("a flat Code 2 on HTTP 200 from a data endpoint exits 1 with the credentials hint", async () => {
+  const cli = makeCli(() => jsonResponse(fx.flatBadCredentials), { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" });
+  const code = await run(["data", "table", "12411-0001"], cli.deps);
+  assert.equal(code, 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(cli.err.join("\n"), /GENESIS status 2 \(ERROR\) \/ HTTP 200/);
+  assert.match(cli.err.join("\n"), /^Hint: check your credentials/m);
+});
