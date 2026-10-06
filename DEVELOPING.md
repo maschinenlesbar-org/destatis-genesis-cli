@@ -157,6 +157,13 @@ What the library rejects:
   username used to go out in the token's wire format, a lone password was dropped.
   The CLI's `resolveCredentials` keeps only the flag > env precedence; `action()`
   builds the client first and rewords this error with the flags and env vars.
+- **A token together with a login** (`tokenOrLoginProblem`): a `token` next to a
+  `username` or `password` (after blank-to-unset) throws at construction —
+  `Invalid credentials: Pass either a token or a username and password, not both.`
+  (`TOKEN_WITH_LOGIN_PROBLEM`, no value in it). Until the follow-up round of
+  2026-10-06 the token won silently. The CLI has no rule of its own: it passes every
+  credential set (flag > env per field) and rewords the library's error, naming the
+  flags/variables that were set (exit 2, no request).
 - **The access mode is explicit** (`accessModeProblem`, follow-up round
   2026-10-06: "no fallbacks … make no auth usecase explicit"): a client runs with
   credentials or with `guest: true`, chosen by the caller. Neither throws at
@@ -215,13 +222,14 @@ groups demand credentials (`requireAuth()` in `client.ts`, see above). The clien
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; values checked by the library's
-`credentialProblem`, precedence in `shared.ts:resolveCredentials`). A token wins over username/password, except that
-a `--username`/`--password` *flag* beats an env-only token (commander's value
-source tells flag from env). Per field a flag beats its variable, so `--username`
-combines with `DESTATIS_PASSWORD`. A `--token` flag together with a `--username` or
-`--password` flag is a usage error (exit 2, no request): two logins on one command
-line, and which is meant can't be told. Supplying only one of username/password is
-rejected by the library (see below) and reworded by the CLI with the flags (exit 2).
+`credentialProblem`, precedence in `shared.ts:resolveCredentials`). Per field a flag
+beats its variable, so `--username` combines with `DESTATIS_PASSWORD`; nothing else
+is picked. A token together with a username or password, from any source (flags,
+variables, mixed), is two logins whose intended one can't be told: the library
+refuses it (`tokenOrLoginProblem`, see above) and the CLI rewords that as a usage
+error naming the sources (exit 2, no request). Supplying only one of
+username/password is rejected by the library (see below) and reworded by the CLI
+with the flags (exit 2).
 
 Two things the transport MUST get right (both found by live testing):
 
@@ -390,7 +398,7 @@ for every transport (P5):
 (`engines`); CI (`ci.yml`) type-checks, builds and tests on Node 22/24. Tests inject a mock
 `Transport` and a mocked `CliDeps` (`test/helpers.ts`, `test/fixtures.ts`). The
 GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
-credential injection + token precedence (`client.test.ts`), the credential guard
+credential injection + the one-login rule (`client.test.ts`), the credential guard
 / exit codes / env seeding (`cli.test.ts`).
 
 Conformance tests (`test/conformance-p*.test.ts`, shared across the `*-cli` repos;

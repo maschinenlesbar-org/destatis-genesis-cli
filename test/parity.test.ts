@@ -567,15 +567,21 @@ for (const pc of pairCases) {
   });
 }
 
-test("parity #3: a lone username or password next to a token is not an error (the token wins)", async () => {
-  const p = await parity({
-    argv: ["--compact", "--token", TOKEN_VALUE, "find", "Bev"],
-    env: { DESTATIS_USERNAME: "user" },
-    lib: (t) => new DestatisClient({ transport: t, token: TOKEN_VALUE, username: "user" }).find({ term: "Bev" }),
-    responder: () => jsonResponse(fx.findResult),
-  });
-  assertSameRequest(p);
-  assert.equal(p.lib.requests[0]!.headers?.["username"], TOKEN_VALUE);
+test("parity #3: a username or password next to a token is rejected by both, with no request", async () => {
+  for (const [argv, env, lib] of [
+    [["--token", TOKEN_VALUE], { DESTATIS_USERNAME: "user" }, { username: "user" }],
+    [["--token", TOKEN_VALUE, "--password", "pass"], {}, { password: "pass" }],
+    [[], { DESTATIS_API_TOKEN: TOKEN_VALUE, DESTATIS_USERNAME: "user", DESTATIS_PASSWORD: "pass" }, { username: "user", password: "pass" }],
+  ] as const) {
+    const p = await parity({
+      argv: ["--compact", ...argv, "find", "Bev"],
+      env: { ...env },
+      lib: (t) => new DestatisClient({ transport: t, token: TOKEN_VALUE, ...lib }).find({ term: "Bev" }),
+      responder: () => jsonResponse(fx.findResult),
+    });
+    assertBothReject(p, /^Invalid credentials: Pass either a token or a username and password, not both\.$/);
+    assert.match(p.cli.err, /^Error: A token cannot be combined with a username\/password \(set: /m);
+  }
 });
 
 test("parity #3 control: a username/password pair sends the identical request", async () => {

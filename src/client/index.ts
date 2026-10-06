@@ -40,6 +40,8 @@ export {
   credentialPairProblem,
   GUEST_WITH_CREDENTIALS_PROBLEM,
   NO_CREDENTIALS_PROBLEM,
+  TOKEN_WITH_LOGIN_PROBLEM,
+  tokenOrLoginProblem,
   credentialProblem,
   headerNameProblem,
   headerValueProblem,

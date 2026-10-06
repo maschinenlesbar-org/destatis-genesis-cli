@@ -32,12 +32,12 @@ credential is bundled with this tool.
 | Token (recommended) | `--token <t>` | `DESTATIS_API_TOKEN` |
 | Username + password | `--username <u>` / `--password <p>` | `DESTATIS_USERNAME` / `DESTATIS_PASSWORD` |
 
-Precedence per field is **flag > env var > unset**; a token takes precedence over
-username/password — except that a `--username`/`--password` **flag** beats a token
-from `DESTATIS_API_TOKEN`, so the account you name on the command line is the one
-used. Per field means `--username` combines with `DESTATIS_PASSWORD`. A `--token`
-flag together with a `--username` or `--password` flag is refused (exit 2): pass one
-login, not two.
+Precedence per field is **flag > env var > unset**, so `--username` combines with
+`DESTATIS_PASSWORD`. Use **one** login: a token together with a username or password —
+from flags, variables or a mix, e.g. `DESTATIS_API_TOKEN` set while you pass
+`--username`/`--password` — is refused (exit 2, naming where each came from, never the
+values) instead of one silently winning. Unset the other one. The library refuses the
+same combination (`DestatisValidationError`).
 
 **Without an account, say so: `--guest`.** `destatis --guest find …` searches as
 GENESIS's guest user `GAST`; `catalogue`, `metadata`, `data` and `logincheck` need an

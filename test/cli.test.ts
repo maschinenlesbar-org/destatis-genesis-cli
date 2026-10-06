@@ -163,50 +163,43 @@ test("an explicit --token overrides DESTATIS_API_TOKEN from the environment", as
   assert.equal(cli.mt.last().headers?.["username"], "0123456789abcdef0123456789abcdef");
 });
 
-test("--username/--password flags beat a DESTATIS_API_TOKEN from the environment", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_API_TOKEN: "envtok" });
-  const code = await run(["--username", "flaguser", "--password", "flagpass", "logincheck"], cli.deps);
-  assert.equal(code, 0);
-  assert.equal(cli.mt.last().headers?.["username"], "flaguser");
-  assert.equal(cli.mt.last().headers?.["password"], "flagpass");
+test("a token together with a username or password, from any source, is a usage error naming the sources", async () => {
+  const T = "0123456789abcdef0123456789abcdef";
+  for (const [argv, env, named] of [
+    [[...TOKEN, "--username", "flaguser", "--password", "flagpass"], {}, "--token, --username, --password"],
+    [[...TOKEN, "--username", "flaguser"], {}, "--token, --username"],
+    [[...TOKEN, "--password", "flagpass"], {}, "--token, --password"],
+    [["--username", "flaguser", "--password", "flagpass"], { DESTATIS_API_TOKEN: T }, "DESTATIS_API_TOKEN, --username, --password"],
+    [["--username", "flaguser"], { DESTATIS_API_TOKEN: T }, "DESTATIS_API_TOKEN, --username"],
+    [["--password", "flagpass"], { DESTATIS_API_TOKEN: T, DESTATIS_USERNAME: "envuser" }, "DESTATIS_API_TOKEN, DESTATIS_USERNAME, --password"],
+    [[...TOKEN], { DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass1" }, "--token, DESTATIS_USERNAME, DESTATIS_PASSWORD"],
+    [[], { DESTATIS_API_TOKEN: T, DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass1" }, "DESTATIS_API_TOKEN, DESTATIS_USERNAME, DESTATIS_PASSWORD"],
+    [[], { DESTATIS_API_TOKEN: T, DESTATIS_PASSWORD: "envpass1" }, "DESTATIS_API_TOKEN, DESTATIS_PASSWORD"],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.loginOk), { ...env });
+    const code = await run([...argv, "logincheck"], cli.deps);
+    const label = `${argv.join(" ")} ${JSON.stringify(env)}`;
+    assert.equal(code, 2, label);
+    assert.equal(cli.mt.calls.length, 0, label);
+    const err = cli.err.join("\n");
+    assert.ok(err.includes(`Error: A token cannot be combined with a username/password (set: ${named}).`), `${label}\n${err}`);
+    assert.doesNotMatch(err, /flagpass|envpass1|0123456789abcdef/);
+  }
 });
 
-test("a --password flag combines with DESTATIS_USERNAME and beats DESTATIS_API_TOKEN", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk), {
-    DESTATIS_API_TOKEN: "envtok",
-    DESTATIS_USERNAME: "envuser",
-  });
+test("a blank DESTATIS_API_TOKEN is unset, so it doesn't conflict with a login", async () => {
+  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_API_TOKEN: "  ", DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass" });
+  assert.equal(await run(["logincheck"], cli.deps), 0, cli.err.join("\n"));
+  assert.equal(cli.mt.last().headers?.["username"], "envuser");
+  assert.equal(cli.mt.last().headers?.["password"], "envpass");
+});
+
+test("a --password flag combines with DESTATIS_USERNAME (flag wins per field)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass" });
   const code = await run(["--password", "flagpass", "logincheck"], cli.deps);
   assert.equal(code, 0);
   assert.equal(cli.mt.last().headers?.["username"], "envuser");
   assert.equal(cli.mt.last().headers?.["password"], "flagpass");
-});
-
-test("a lone --username flag with an env token is a usage error, not a silent token login", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_API_TOKEN: "envtok" });
-  const code = await run(["--username", "flaguser", "logincheck"], cli.deps);
-  assert.equal(code, 2);
-  assert.equal(cli.mt.calls.length, 0);
-  assert.match(cli.err.join("\n"), /BOTH --username and --password/);
-});
-
-test("a --token flag together with a --username or --password flag is a usage error", async () => {
-  for (const pair of [["--username", "flaguser", "--password", "flagpass"], ["--username", "flaguser"], ["--password", "flagpass"]]) {
-    const cli = makeCli(() => jsonResponse(fx.loginOk));
-    const code = await run([...TOKEN, ...pair, "logincheck"], cli.deps);
-    assert.equal(code, 2, pair.join(" "));
-    assert.equal(cli.mt.calls.length, 0);
-    assert.match(cli.err.join("\n"), /--token cannot be combined with --username\/--password/);
-    assert.doesNotMatch(cli.err.join("\n"), /flagpass|0123456789abcdef/);
-  }
-});
-
-test("a --token flag beats DESTATIS_USERNAME/DESTATIS_PASSWORD from the environment", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass" });
-  const code = await run([...TOKEN, "logincheck"], cli.deps);
-  assert.equal(code, 0);
-  assert.equal(cli.mt.last().headers?.["username"], "0123456789abcdef0123456789abcdef");
-  assert.equal(cli.mt.last().headers?.["password"], undefined);
 });
 
 test("a --username flag combines with DESTATIS_PASSWORD (flag wins per field)", async () => {
@@ -215,17 +208,6 @@ test("a --username flag combines with DESTATIS_PASSWORD (flag wins per field)", 
   assert.equal(code, 0);
   assert.equal(cli.mt.last().headers?.["username"], "flaguser");
   assert.equal(cli.mt.last().headers?.["password"], "envpass");
-});
-
-test("with env credentials only, DESTATIS_API_TOKEN still beats DESTATIS_USERNAME/PASSWORD", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk), {
-    DESTATIS_API_TOKEN: "envtok",
-    DESTATIS_USERNAME: "envuser",
-    DESTATIS_PASSWORD: "envpass",
-  });
-  await run(["logincheck"], cli.deps);
-  assert.equal(cli.mt.last().headers?.["username"], "envtok");
-  assert.equal(cli.mt.last().headers?.["password"], undefined);
 });
 
 test("a control character in --user-agent is rejected before any request", async () => {

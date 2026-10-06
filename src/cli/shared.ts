@@ -12,6 +12,7 @@ import {
   BASE_URL_USERINFO_PROBLEM,
   GUEST_WITH_CREDENTIALS_PROBLEM,
   NO_CREDENTIALS_PROBLEM,
+  TOKEN_WITH_LOGIN_PROBLEM,
   baseUrlProblem,
   CREDENTIAL_PAIR_PROBLEM,
   credentialProblem,
@@ -152,33 +153,27 @@ export interface CredentialSources {
 }
 
 /**
- * Resolve the credential flags into a normalized form. A token wins over
- * username/password — except that a `--username`/`--password` **flag** beats a
- * token that only came from `DESTATIS_API_TOKEN`: the account named on the
- * command line is the one the user means, so an env token must not silently
- * authenticate as someone else. (A `--token` flag beats an env username/password;
- * a `--token` flag together with a `--username`/`--password` flag is refused by
- * {@link action} before this runs.) Per field, a flag beats its variable, so
- * `--username` combines with `DESTATIS_PASSWORD`.
- * Precedence only: a lone username or password is passed on as is, and the
- * library's pair rule rejects it when the client is built (see {@link action}).
- * No credentials at all is allowed here — the library rejects an account-only
- * call without them, and {@link action} rewords that error.
+ * Resolve the credential options (flags already seeded from env) into a normalized
+ * form. Per field a flag beats its variable — so `--username` combines with
+ * `DESTATIS_PASSWORD` — and a blank variable counts as unset. Nothing else is
+ * picked: every credential set, from any source, is passed on, and the library
+ * decides — a token together with a username or password is refused
+ * (`TOKEN_WITH_LOGIN_PROBLEM`), and so is half a pair; {@link action} rewords both.
+ * No credentials at all is allowed here — without `--guest` the library refuses
+ * that too. (`fromCli` is no longer used; kept so callers compile.)
  */
 export function resolveCredentials(
   global: GlobalOptions,
-  fromCli: CredentialSources = {},
+  _fromCli: CredentialSources = {},
 ): ResolvedCredentials {
-  const pairFromCli = !fromCli.token && (fromCli.username === true || fromCli.password === true);
-  const token = pairFromCli ? undefined : nonBlank(global.token);
-  if (token) return { token, present: true };
-
+  const token = nonBlank(global.token);
   const username = nonBlank(global.username);
   const password = nonBlank(global.password);
   return {
+    ...(token !== undefined ? { token } : {}),
     ...(username !== undefined ? { username } : {}),
     ...(password !== undefined ? { password } : {}),
-    present: username !== undefined && password !== undefined,
+    present: token !== undefined || (username !== undefined && password !== undefined),
   };
 }
 
@@ -217,14 +212,37 @@ export const NO_CREDENTIALS_MESSAGE =
   "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), or pass --guest to run without an account " +
   "(guest access covers `find` only). A free account is available at https://www-genesis.destatis.de.";
 
+/** Where each set credential came from, as the user would name it: `--token` or `DESTATIS_API_TOKEN`. */
+function credentialSourceNames(
+  creds: ResolvedCredentials,
+  sources: Partial<Record<keyof typeof CREDENTIAL_ENV_VARS, string | undefined>>,
+): string[] {
+  return (["token", "username", "password"] as const)
+    .filter((key) => creds[key] !== undefined)
+    .map((key) => (sources[key] === "env" ? CREDENTIAL_ENV_VARS[key] : `--${key}`));
+}
+
 /**
- * Build the client, rewording the library's credential errors (a half pair, no
- * access mode, guest with credentials) with the flags and env vars.
+ * Build the client, rewording the library's credential errors (a token with a
+ * login, a half pair, no access mode, guest with credentials) with the flags and
+ * env vars — naming where each credential came from, never its value.
  */
-function createClient(deps: CliDeps, options: DestatisClientOptions): ReturnType<CliDeps["createClient"]> {
+function createClient(
+  deps: CliDeps,
+  options: DestatisClientOptions,
+  setBy: readonly string[] = [],
+): ReturnType<CliDeps["createClient"]> {
   try {
     return deps.createClient(options);
   } catch (err) {
+    if (err instanceof DestatisValidationError && err.message.endsWith(TOKEN_WITH_LOGIN_PROBLEM)) {
+      throw new DestatisUsageError(
+        `A token cannot be combined with a username/password (set: ${setBy.join(", ")}). ` +
+          "Pass either --token (env DESTATIS_API_TOKEN) or --username/--password " +
+          "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), not both.",
+        { cause: err },
+      );
+    }
     if (err instanceof DestatisValidationError && err.message.endsWith(CREDENTIAL_PAIR_PROBLEM)) {
       throw new DestatisUsageError(
         "Provide BOTH --username and --password (or use --token). " +
@@ -519,25 +537,12 @@ export function action(
       username: root.getOptionValueSource("username"),
       password: root.getOptionValueSource("password"),
     };
-    // --token and --username/--password on one command line name two different logins;
-    // which one is meant can't be told, so neither is picked.
-    if (sources.token === "cli" && (sources.username === "cli" || sources.password === "cli")) {
-      throw new DestatisUsageError(
-        "--token cannot be combined with --username/--password: pass either a token or a username and password.",
-      );
-    }
-    const creds: ResolvedCredentials =
-      global.guest === true
-        ? { present: false }
-        : resolveCredentials(global, {
-            token: sources.token === "cli",
-            username: sources.username === "cli",
-            password: sources.password === "cli",
-          });
+    const creds: ResolvedCredentials = global.guest === true ? { present: false } : resolveCredentials(global);
     checkEnvCredentials(creds, sources);
-    // No credentials without --guest, or half a username/password pair, gets the
-    // library's error, reworded.
-    const client = createClient(deps, toClientOptions(global, creds));
+    // A token together with a username or password (from any source), no credentials
+    // without --guest, or half a username/password pair: the library refuses, and the
+    // error is reworded here (exit 2, before any request).
+    const client = createClient(deps, toClientOptions(global, creds), credentialSourceNames(creds, sources));
     if (creds.present) warnArgvCredentials(deps, command);
     warnCleartext(deps, global, creds);
     await withCredentialsHint(() => fn({ client, global, opts: command.opts() }, positionals));

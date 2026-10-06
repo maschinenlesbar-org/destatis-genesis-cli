@@ -84,6 +84,9 @@ sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufi
 - **Benutzername / Passwort** – die Anmeldedaten des Kontos (Benutzername etwa 10 Zeichen,
   kann eine E-Mail-Adresse sein; Passwort 10–50 Zeichen). Nur gemeinsam anzugeben:
   Eines ohne das andere weisen CLI und Bibliothek gleichermaßen vor jeder Anfrage zurück.
+  Token und Benutzername/Passwort sind zwei Anmeldungen: Beides zugleich (über Optionen,
+  Umgebungsvariablen oder gemischt) wird ebenfalls abgelehnt, statt dass eines still
+  gewinnt.
 - **Nur mit Konto** – `catalogue`, `metadata`, `data` und `logincheck` brauchen Zugangsdaten;
   ohne sie antwortet GENESIS mit 401 und Code `15`, deshalb lehnen CLI und Bibliothek den
   Aufruf schon vor jeder Anfrage ab.

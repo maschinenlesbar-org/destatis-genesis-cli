@@ -17,11 +17,11 @@ import { findResult } from "./fixtures.js";
 /** The environment variable the CLI reads a base URL from, or undefined if it has none. */
 const BASE_URL_ENV: string | undefined = undefined; // destatis has no base-URL variable
 /** Extra argv that sends a secret other than URL userinfo (API key, token, login), or undefined. */
-const SECRET_ARGS: string[] | undefined = ["--token", "k3y-SECRET-value"];
+const SECRET_ARGS: string[] | undefined = ["--username", "flaguser01", "--password", "k3y-SECRET-value"];
 /** The secret value inside SECRET_ARGS, which must never be printed. */
 const SECRET_VALUE = "k3y-SECRET-value";
 /** Words the warning uses for that secret (matched case-insensitively), e.g. /API key/. */
-const SECRET_WORDS = /the token/i;
+const SECRET_WORDS = /the login/i; // "the token" is checked in cli.test.ts (a token next to the env login would be refused)
 /**
  * Why the "credentials in an http base URL" case can't run here, or false: `--base-url`
  * rejects a URL with userinfo as a usage error (exit 2, before any request), so no
@@ -31,7 +31,8 @@ const SKIP_USERINFO: string | false = "--base-url rejects userinfo as a usage er
 /**
  * A command that makes one request. Every request-making command needs credentials or
  * an explicit --guest (and --guest with SECRET_ARGS would be a usage error), so the runs
- * carry a login from the environment (see makeDeps): the warning then names it too.
+ * carry a login from the environment (see makeDeps; SECRET_ARGS override it per field):
+ * the warning then names it too.
  */
 const SIMPLE_COMMAND = ["find", "Bevölkerung"];
 /** A successful answer to SIMPLE_COMMAND. */

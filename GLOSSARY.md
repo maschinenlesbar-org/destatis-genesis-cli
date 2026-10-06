@@ -81,7 +81,9 @@ meaningful statement possible), `()` (limited informative value), `p`
   Generating a new token invalidates the old one.
 - **Username / password** — the account login (username ~10 chars, may be an
   email; password 10–50 chars). Required together: one without the other is
-  refused before any request, by the CLI and the library alike.
+  refused before any request, by the CLI and the library alike. A token and a
+  username/password are two logins: both at once (from flags, variables or a mix) are
+  refused too, rather than one silently winning.
 - **Account-only endpoints** — `catalogue`, `metadata`, `data` and `logincheck`
   need credentials; without them GENESIS answers 401 + Code `15`, so the CLI and
   the library refuse the call before any request.

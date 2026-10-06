@@ -5,7 +5,7 @@ import { makeMockTransport, jsonResponse, bodyOf, type MockTransport } from "./h
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import * as fx from "./fixtures.js";
 import { DestatisValidationError } from "../src/client/errors.js";
-import { GUEST_WITH_CREDENTIALS_PROBLEM, NO_CREDENTIALS_PROBLEM } from "../src/client/validate.js";
+import { GUEST_WITH_CREDENTIALS_PROBLEM, NO_CREDENTIALS_PROBLEM, TOKEN_WITH_LOGIN_PROBLEM } from "../src/client/validate.js";
 
 function client(
   responder: (req: HttpRequest) => HttpResponse,
@@ -46,15 +46,19 @@ test("username+password mode sends both credential headers", async () => {
   assert.equal(mt.last().headers?.["password"], "PASSWORD01");
 });
 
-test("a token takes precedence over username/password", async () => {
-  const { c, mt } = client(() => jsonResponse(fx.tablesList), {
-    token: "THETOKEN",
-    username: "USER123456",
-    password: "PASSWORD01",
-  });
-  await c.catalogue.tables({});
-  assert.equal(mt.last().headers?.["username"], "THETOKEN");
-  assert.equal(mt.last().headers?.["password"], undefined);
+test("a token together with a username or password is refused, naming no value", () => {
+  for (const login of [{ username: "USER123456", password: "PASSWORD01" }, { username: "USER123456" }, { password: "PASSWORD01" }]) {
+    assert.throws(
+      () => new DestatisClient({ token: "THETOKEN", ...login, transport: async () => jsonResponse({}) }),
+      (err) =>
+        err instanceof DestatisValidationError &&
+        err.message === `Invalid credentials: ${TOKEN_WITH_LOGIN_PROBLEM}` &&
+        !/THETOKEN|USER123456|PASSWORD01/.test(err.message),
+      JSON.stringify(login),
+    );
+  }
+  // A blank token is unset, so it doesn't conflict.
+  assert.doesNotThrow(() => new DestatisClient({ token: " ", username: "USER123456", password: "PASSWORD01", transport: async () => jsonResponse({}) }));
 });
 
 test("find posts term and category in the body to find/find", async () => {

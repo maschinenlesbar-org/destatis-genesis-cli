@@ -241,6 +241,21 @@ export function accessModeProblem(mode: { hasCredentials: boolean; guest: unknow
   return mode.hasCredentials ? undefined : NO_CREDENTIALS_PROBLEM;
 }
 
+/** `tokenOrLoginProblem`'s reason when a token comes with a username or password. */
+export const TOKEN_WITH_LOGIN_PROBLEM = "Pass either a token or a username and password, not both.";
+
+/**
+ * A token and a username/password are two different logins; which one is meant
+ * can't be told, so a client given a token and a username or password is refused
+ * rather than letting one silently win. Pass the values after blank-to-unset. The
+ * reason names the fields, never their values.
+ */
+export function tokenOrLoginProblem(creds: { token?: string | undefined; username?: string | undefined; password?: string | undefined }): string | undefined {
+  return creds.token !== undefined && (creds.username !== undefined || creds.password !== undefined)
+    ? TOKEN_WITH_LOGIN_PROBLEM
+    : undefined;
+}
+
 /** `credentialsRequiredProblem`'s reason when an account-only endpoint has no credentials. */
 export const CREDENTIALS_REQUIRED_PROBLEM = "This endpoint needs an account (a token, or a username and password).";
 

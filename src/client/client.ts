@@ -31,6 +31,7 @@ import {
   credentialsRequiredProblem,
   nonBlankProblem,
   plainObjectProblem,
+  tokenOrLoginProblem,
 } from "./validate.js";
 import {
   CATALOGUE_PARAM_KEYS,
@@ -123,7 +124,8 @@ function named(name: string, params: unknown, keys: readonly string[], options: 
 export interface DestatisClientOptions extends EngineOptions {
   /**
    * A 32-char personal API token. Sent in the `username` header field with no
-   * password. Takes precedence over `username`/`password` if both are given.
+   * password. Not together with `username`/`password`: a token next to either is a
+   * `DestatisValidationError` (`TOKEN_WITH_LOGIN_PROBLEM`), never a silent pick.
    */
   token?: string;
   /**
@@ -292,6 +294,8 @@ export class DestatisClient {
     const pass = set("password", password);
     // One access mode, chosen explicitly (no silent guest): credentials or guest: true.
     assertValid("credentials", { hasCredentials: [tok, user, pass].some((v) => v !== undefined), guest }, accessModeProblem);
+    // One login: a token or a username and password, never both (no silent winner).
+    assertValid("credentials", { token: tok, username: user, password: pass }, tokenOrLoginProblem);
     if (tok) {
       this.#username = tok;
       this.#password = undefined;
