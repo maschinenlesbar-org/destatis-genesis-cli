@@ -220,6 +220,27 @@ export function credentialPairProblem(creds: { username?: string; password?: str
   return (creds.username === undefined) === (creds.password === undefined) ? undefined : CREDENTIAL_PAIR_PROBLEM;
 }
 
+/** `accessModeProblem`'s reason when a client is given neither credentials nor `guest: true`. */
+export const NO_CREDENTIALS_PROBLEM =
+  "No credentials: pass a token, a username and password, or guest: true for guest access (whoami and find only).";
+
+/** `accessModeProblem`'s reason when `guest: true` comes with a credential. */
+export const GUEST_WITH_CREDENTIALS_PROBLEM = "guest: true cannot be combined with a token, username or password.";
+
+/**
+ * A client runs in exactly one access mode, chosen explicitly: with credentials (a
+ * token, or a username and password) or as the GENESIS guest user (`guest: true`).
+ * Neither is a configuration error rather than a silent guest — an unset or empty
+ * `DESTATIS_API_TOKEN` must not quietly turn into anonymous access — and both is
+ * one too. `hasCredentials` is whether any of token/username/password is set (after
+ * blank-to-unset); `guest` must be a boolean when given.
+ */
+export function accessModeProblem(mode: { hasCredentials: boolean; guest: unknown }): string | undefined {
+  if (mode.guest !== undefined && typeof mode.guest !== "boolean") return "guest must be true or false.";
+  if (mode.guest === true) return mode.hasCredentials ? GUEST_WITH_CREDENTIALS_PROBLEM : undefined;
+  return mode.hasCredentials ? undefined : NO_CREDENTIALS_PROBLEM;
+}
+
 /** `credentialsRequiredProblem`'s reason when an account-only endpoint has no credentials. */
 export const CREDENTIALS_REQUIRED_PROBLEM = "This endpoint needs an account (a token, or a username and password).";
 

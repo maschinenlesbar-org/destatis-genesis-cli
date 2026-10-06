@@ -46,7 +46,9 @@ Jede Antwort außer von `helloworld` steckt in einer Hülle:
 `logincheck` antwortet mit HTTP 200, ob die Zugangsdaten stimmen oder nicht: `Status` ist
 ein Text – ein Fehlertext („Ein Fehler ist aufgetreten …“) heißt, sie wurden abgelehnt,
 und die CLI endet mit Exit 1 und dem Hinweis auf die Zugangsdaten – und `Username` nennt
-das Konto (ein falscher Token kommt dort als Echo zurück).
+das Konto (der gesendete Token kann dort als Echo zurückkommen). Entscheidend ist nur ein
+ausdrücklicher Erfolgs- oder Fehlertext; jede andere Antwort gilt als nicht bestätigt
+(Exit 1).
 
 ## Werte von `Status.Code`
 
@@ -84,8 +86,12 @@ sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufi
   Eines ohne das andere weisen CLI und Bibliothek gleichermaßen vor jeder Anfrage zurück.
 - **Nur mit Konto** – `catalogue`, `metadata`, `data` und `logincheck` brauchen Zugangsdaten;
   ohne sie antwortet GENESIS mit 401 und Code `15`, deshalb lehnen CLI und Bibliothek den
-  Aufruf schon vor jeder Anfrage ab. `hello` (`whoami`) und `find` funktionieren ohne
-  Zugangsdaten (`find` als Gastnutzer `GAST`).
+  Aufruf schon vor jeder Anfrage ab.
+- **Gastzugang** – ohne Konto, als Gastnutzer `GAST` von GENESIS: nur `find` (und `hello`,
+  das nie Zugangsdaten sendet). Er muss ausdrücklich gewählt werden – `--guest` in der CLI,
+  `guest: true` in der Bibliothek; ohne Zugangsdaten und ohne diese Wahl verweigern CLI
+  und Bibliothek den Aufruf, statt still als Gast zu laufen, und `--guest` zusammen mit
+  Zugangsdaten wird ebenfalls abgelehnt.
 
 Wie Zugangsdaten übertragen werden und warum Weiterleitungen nicht gefolgt wird, beschreibt
 [DEVELOPING.md](DEVELOPING.md) (englisch).

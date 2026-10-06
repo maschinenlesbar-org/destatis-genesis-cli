@@ -8,18 +8,22 @@
 // request parameters in a form-urlencoded body. No credential is bundled; pass
 // them via the options below (CLI: --token / --username+--password, or the
 // DESTATIS_API_TOKEN / DESTATIS_USERNAME / DESTATIS_PASSWORD env vars).
-// `whoami()` needs no credentials, and `find()` works without them too (GENESIS
-// answers an anonymous call as the guest user "GAST"); catalogue, metadata, data
-// and `logincheck()` need an account, and reject with `DestatisValidationError`
-// before any request when the client has no credentials.
+// Running without an account is explicit: `guest: true` (CLI: --guest) — a client
+// with neither credentials nor `guest: true` throws `DestatisValidationError` at
+// construction, never falling back to guest access. As guest, `whoami()` and
+// `find()` work (GENESIS answers an anonymous search as the guest user "GAST");
+// catalogue, metadata, data and `logincheck()` need an account, and reject with
+// `DestatisValidationError` before any request when the client has none.
 //
 //   const c = new DestatisClient({ token: process.env.DESTATIS_API_TOKEN });
+//   const guest = new DestatisClient({ guest: true });
 //   await c.find({ term: "Bevölkerung" });
 //   await c.data.table("12411-0001", { startyear: "2020" });
 
 import { RequestEngine, type EngineOptions, type RawResponse, type ResponseShape } from "./engine.js";
 import type { QueryParams } from "./query.js";
 import {
+  accessModeProblem,
   assertRequestParams,
   assertValid,
   credentialPairProblem,
@@ -129,6 +133,12 @@ export interface DestatisClientOptions extends EngineOptions {
   username?: string;
   /** Account password (10–50 chars). */
   password?: string;
+  /**
+   * Run without an account, as the GENESIS guest user: `whoami()` and `find()` only.
+   * Must be set explicitly when no credential is given — a client with neither
+   * throws `DestatisValidationError` — and must not be combined with one.
+   */
+  guest?: boolean;
 }
 
 /** `catalogue/*` browse endpoints — each returns an enveloped `List`. */
@@ -265,11 +275,12 @@ export class DestatisClient {
 
   constructor(options: DestatisClientOptions = {}) {
     assertValid("options", options, plainObjectProblem);
-    const { token, username, password, ...engineOptions } = options;
+    const { token, username, password, guest, ...engineOptions } = options;
     // Token mode collapses onto the `username` field with no password; otherwise
     // use the username/password pair. Blank (empty or whitespace-only) values are
-    // treated as unset (so `token: process.env.DESTATIS_API_TOKEN` works when the
-    // variable is empty); any other value must be a valid credential header value
+    // treated as unset (an empty `token: process.env.DESTATIS_API_TOKEN` counts as no
+    // token — and with no other credential and no `guest: true` that is an error, not
+    // guest access); any other value must be a valid credential header value
     // (`credentialProblem`: no control characters, nothing above U+00FF, no
     // surrounding whitespace) and is sent exactly as given, never trimmed.
     // A non-string (a JavaScript caller's number or null) is a DestatisValidationError,
@@ -277,12 +288,16 @@ export class DestatisClient {
     const set = (name: string, v: unknown): string | undefined =>
       v === undefined || (typeof v === "string" && v.trim() === "") ? undefined : assertValid(name, v as string, credentialProblem);
     const tok = set("token", token);
+    const user = set("username", username);
+    const pass = set("password", password);
+    // One access mode, chosen explicitly (no silent guest): credentials or guest: true.
+    assertValid("credentials", { hasCredentials: [tok, user, pass].some((v) => v !== undefined), guest }, accessModeProblem);
     if (tok) {
       this.#username = tok;
       this.#password = undefined;
     } else {
-      this.#username = set("username", username);
-      this.#password = set("password", password);
+      this.#username = user;
+      this.#password = pass;
       assertValid("credentials", { username: this.#username, password: this.#password }, credentialPairProblem);
     }
     this.engine = new RequestEngine(engineOptions);
@@ -320,10 +335,10 @@ export class DestatisClient {
   /**
    * `helloworld/logincheck` — validate the supplied credentials. Resolves only when
    * GENESIS confirms the login. Wrong credentials — which GENESIS answers with HTTP 200
-   * and an error text in `Status` (or the token echoed as `Username`) — reject with a
-   * `DestatisApiError` whose `isAuthError` (and `loginRejected`) is true; an answer that
-   * confirms nothing rejects with `DestatisParseError`. Rejects with
-   * `DestatisValidationError` when the client has none (there is nothing to check).
+   * and an error text in `Status` — reject with a `DestatisApiError` whose `isAuthError`
+   * (and `loginRejected`) is true; an answer that is neither an explicit success nor an
+   * explicit failure rejects with `DestatisParseError`. Rejects with
+   * `DestatisValidationError` for a guest client (there is nothing to check).
    */
   async logincheck(language?: Language): Promise<LoginCheckResponse> {
     const params: QueryParams = { language };

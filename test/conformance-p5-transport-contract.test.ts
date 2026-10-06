@@ -11,7 +11,18 @@ import type { AddressInfo } from "node:net";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 
 // ---- adapter (per repo) -------------------------------------------------------------
-import { DestatisClient as Client } from "../src/client/client.js";
+import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
+/**
+ * The client. Without a credential the library wants guest access said explicitly
+ * (`guest: true`, no silent guest), so a client built here without one runs as guest.
+ */
+class Client extends DestatisClient {
+  constructor(options: DestatisClientOptions = {}) {
+    const o = options as DestatisClientOptions | null;
+    const anonymous = typeof o === "object" && o !== null && o.token === undefined && o.username === undefined && o.password === undefined;
+    super(anonymous ? { guest: true, ...o } : options);
+  }
+}
 import { DestatisNetworkError as NetworkError } from "../src/client/errors.js";
 /** One call that makes a single request and needs no arguments. */
 const call = (client: Client): Promise<unknown> => client.find({ term: "Bevölkerung" });

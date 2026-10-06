@@ -77,14 +77,19 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
         "(https://genesis.destatis.de) — Germany's official-statistics database. " +
         "Needs a free account: pass --token (env DESTATIS_API_TOKEN) or " +
         "--username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
-        "Register at https://www-genesis.destatis.de; `destatis hello` and `destatis find` " +
-        "work without credentials.",
+        "Register at https://www-genesis.destatis.de. Without an account, pass --guest " +
+        "explicitly: `destatis --guest find …` searches as the GENESIS guest user; " +
+        "`destatis hello` needs neither.",
     )
     .version(VERSION)
     .option("--base-url <url>", "API base URL", parseBaseUrl, "https://genesis.destatis.de")
     .option("--token <token>", "GENESIS API token (env: DESTATIS_API_TOKEN)", parseSecret("--token <token>"))
     .option("--username <user>", "GENESIS account username (env: DESTATIS_USERNAME)", parseSecret("--username <user>"))
     .option("--password <pass>", "GENESIS account password (env: DESTATIS_PASSWORD)", parseSecret("--password <pass>"))
+    .option(
+      "--guest",
+      "run without an account, as the GENESIS guest user (find only); required when no credentials are set, refused with any",
+    )
     .addOption(
       // No .default(): an omitted --language is not sent, exactly like the library,
       // and GENESIS answers in German.

@@ -214,8 +214,8 @@ for (const ec of enumCases) {
 
 test("parity #7 control: --language en find Bev --category tables sends the identical request", async () => {
   const p = await parity({
-    argv: ["--compact", "--language", "en", "find", "Bev", "--category", "tables"],
-    lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev", language: "en", category: "tables" }),
+    argv: ["--compact", "--guest", "--language", "en", "find", "Bev", "--category", "tables"],
+    lib: (t) => new DestatisClient({ guest: true, transport: t }).find({ term: "Bev", language: "en", category: "tables" }),
     responder: () => jsonResponse(fx.findResult),
   });
   assertSameRequest(p);
@@ -293,7 +293,7 @@ test("parity #8: the CLI's --format choices are the library's DATA_FILE_FORMATS"
 // ---- Finding 9 (PAT-15): no CLI-only request defaults --------------------------------
 
 const defaultCases: Array<{ label: string; argv: string[]; lib: (t: Transport) => Promise<unknown>; zip?: boolean }> = [
-  { label: "find Bev", argv: ["find", "Bev"], lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev" }) },
+  { label: "find Bev", argv: ["--guest", "find", "Bev"], lib: (t) => new DestatisClient({ guest: true, transport: t }).find({ term: "Bev" }) },
   { label: "logincheck", argv: [...TOKEN, "logincheck"], lib: (t) => client(t).logincheck() },
   { label: "catalogue tables 124*", argv: [...TOKEN, "catalogue", "tables", "124*"], lib: (t) => client(t).catalogue.tables({ selection: "124*" }) },
   { label: "catalogue modified", argv: [...TOKEN, "catalogue", "modified"], lib: (t) => client(t).catalogue.modifiedData() },
@@ -358,8 +358,8 @@ for (const bc of boundCases) {
 
 test("parity #2 control: --pagelength 25000 and --timeslices 0 send the identical request", async () => {
   const p = await parity({
-    argv: ["--compact", "--pagelength", "25000", "find", "Bev"],
-    lib: (t) => new DestatisClient({ transport: t }).find({ term: "Bev", pagelength: MAX_PAGELENGTH }),
+    argv: ["--compact", "--guest", "--pagelength", "25000", "find", "Bev"],
+    lib: (t) => new DestatisClient({ guest: true, transport: t }).find({ term: "Bev", pagelength: MAX_PAGELENGTH }),
     responder: () => jsonResponse(fx.findResult),
   });
   assertSameRequest(p);
@@ -414,25 +414,25 @@ const headerCases: Array<{
   {
     label: "--user-agent '' hello",
     argv: ["--user-agent", "", "hello"],
-    lib: (t) => new DestatisClient({ transport: t, userAgent: "" }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, userAgent: "" }).whoami(),
     msg: /^Invalid userAgent: Expected a non-empty value\.$/,
   },
   {
     label: "--user-agent with CR/LF, hello",
     argv: ["--user-agent", "a\r\nX-Evil: 1", "hello"],
-    lib: (t) => new DestatisClient({ transport: t, userAgent: "a\r\nX-Evil: 1" }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, userAgent: "a\r\nX-Evil: 1" }).whoami(),
     msg: /^Invalid userAgent: Value contains control characters\.$/,
   },
   {
     label: "--user-agent with DEL, hello",
     argv: ["--user-agent", "a\x7fb", "hello"],
-    lib: (t) => new DestatisClient({ transport: t, userAgent: "a\x7fb" }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, userAgent: "a\x7fb" }).whoami(),
     msg: /^Invalid userAgent: Value contains control characters\.$/,
   },
   {
     label: "--user-agent '€' hello",
     argv: ["--user-agent", "€", "hello"],
-    lib: (t) => new DestatisClient({ transport: t, userAgent: "€" }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, userAgent: "€" }).whoami(),
     msg: /^Invalid userAgent: Value contains characters outside Latin-1/,
   },
 ];
@@ -453,7 +453,7 @@ for (const ua of ["é", "a\tb", " ua "]) {
   test(`parity #4 control: --user-agent ${JSON.stringify(ua)} is sent by both`, async () => {
     const p = await parity({
       argv: ["--compact", "--user-agent", ua, "hello"],
-      lib: (t) => new DestatisClient({ transport: t, userAgent: ua }).whoami(),
+      lib: (t) => new DestatisClient({ guest: true, transport: t, userAgent: ua }).whoami(),
       responder: () => jsonResponse(fx.whoami),
     });
     assert.equal(p.cli.code, 0, p.cli.err);
@@ -465,9 +465,9 @@ for (const ua of ["é", "a\tb", " ua "]) {
 
 test("parity #4: the library still treats a blank credential as unset (the env path does too)", async () => {
   const p = await parity({
-    argv: ["--compact", "find", "Bev"],
+    argv: ["--compact", "--guest", "find", "Bev"],
     env: { DESTATIS_API_TOKEN: "   " },
-    lib: (t) => new DestatisClient({ transport: t, token: "   " }).find({ term: "Bev" }),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, token: "   " }).find({ term: "Bev" }),
     responder: () => jsonResponse(fx.findResult),
   });
   assertSameRequest(p);
@@ -490,7 +490,7 @@ for (const bc of baseUrlCases) {
   test(`parity #5: base URL ${JSON.stringify(bc.url)} is rejected by both, with no request`, async () => {
     const p = await parity({
       argv: ["--compact", "--base-url", bc.url, "hello"],
-      lib: (t) => new DestatisClient({ transport: t, baseUrl: bc.url }).whoami(),
+      lib: (t) => new DestatisClient({ guest: true, transport: t, baseUrl: bc.url }).whoami(),
       responder: () => jsonResponse(fx.whoami),
     });
     assertBothReject(p, bc.msg);
@@ -509,7 +509,7 @@ test("parity #5: the CLI keeps its flag hint for an embedded credential", async 
 test("parity #5 control: a base URL with a path prefix sends the identical request", async () => {
   const p = await parity({
     argv: ["--compact", "--base-url", "https://h.example/prefix/", "hello"],
-    lib: (t) => new DestatisClient({ transport: t, baseUrl: "https://h.example/prefix/" }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, transport: t, baseUrl: "https://h.example/prefix/" }).whoami(),
     responder: () => jsonResponse(fx.whoami),
   });
   assert.equal(p.cli.code, 0, p.cli.err);
@@ -590,8 +590,11 @@ test("parity #3 control: a username/password pair sends the identical request", 
 
 // ---- Finding 6 (PAT-7): account-only endpoints need credentials ------------------------
 
-const NEEDS_CLI =
-  /^Error: This command needs credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
+const NO_CREDS_CLI =
+  /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), or pass --guest to run without an account \(guest access covers `find` only\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
+const NO_CREDS_LIB =
+  /^Invalid credentials: No credentials: pass a token, a username and password, or guest: true for guest access \(whoami and find only\)\.$/;
+const NEEDS_CLI = /^Error: `[a-z ]+` needs an account; --guest covers `find` only\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password/m;
 const NEEDS_LIB = /^Invalid credentials: This endpoint needs an account \(a token, or a username and password\)\.$/;
 
 const needsCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [
@@ -628,21 +631,60 @@ for (const nc of needsCases) {
       lib: nc.lib,
       responder: () => jsonResponse(fx.tablesList),
     });
+    assertBothReject(p, NO_CREDS_LIB);
+    assert.match(p.cli.err, NO_CREDS_CLI);
+  });
+}
+
+// --guest (the library's guest: true) does not open the account-only endpoints.
+const guestCases: Array<{ label: string; argv: string[]; lib: (c: DestatisClient) => Promise<unknown> }> = [
+  { label: "logincheck", argv: ["logincheck"], lib: (c) => c.logincheck() },
+  { label: "catalogue jobs", argv: ["catalogue", "jobs"], lib: (c) => c.catalogue.jobs() },
+  { label: "metadata table 12411-0001", argv: ["metadata", "table", "12411-0001"], lib: (c) => c.metadata.table("12411-0001") },
+  { label: "data table 12411-0001", argv: ["data", "table", "12411-0001"], lib: (c) => c.data.table("12411-0001") },
+  { label: "data cubefile 12411BJ001", argv: ["data", "cubefile", "12411BJ001"], lib: (c) => c.data.cubeFile("12411BJ001") },
+];
+
+for (const gc of guestCases) {
+  test(`parity #6: --guest ${gc.label} is rejected by both, with no request`, async () => {
+    const p = await parity({
+      argv: ["--compact", "--guest", ...gc.argv],
+      lib: (t) => gc.lib(new DestatisClient({ guest: true, transport: t })),
+      responder: () => jsonResponse(fx.tablesList),
+    });
     assertBothReject(p, NEEDS_LIB);
     assert.match(p.cli.err, NEEDS_CLI);
   });
 }
+
+test("parity #6: --guest with a credential is rejected by both, with no request", async () => {
+  for (const [argv, env, lib] of [
+    [["--guest", "--token", TOKEN_VALUE, "find", "Bev"], {}, { token: TOKEN_VALUE }],
+    [["--guest", "find", "Bev"], { DESTATIS_API_TOKEN: TOKEN_VALUE }, { token: TOKEN_VALUE }],
+    [["--guest", "find", "Bev"], { DESTATIS_USERNAME: "user", DESTATIS_PASSWORD: "pass" }, { username: "user", password: "pass" }],
+    [["--guest", "--username", "user", "hello"], {}, { username: "user" }],
+  ] as const) {
+    const p = await parity({
+      argv: ["--compact", ...argv],
+      env: { ...env },
+      lib: (t) => new DestatisClient({ ...lib, guest: true, transport: t }).find({ term: "Bev" }),
+    });
+    assertBothReject(p, /^Invalid credentials: guest: true cannot be combined with a token, username or password\.$/);
+    assert.match(p.cli.err, /^Error: --guest cannot be combined with credentials \((--token|--username|DESTATIS_API_TOKEN|DESTATIS_USERNAME, DESTATIS_PASSWORD) set\)/m);
+    assert.doesNotMatch(p.cli.err, /0123456789abcdef|pass\b/);
+  }
+});
 
 test("parity #6 (and #11 part 3): --token '' catalogue tables is rejected by both, with no request", async () => {
   const p = await parity({
     argv: ["--compact", "--token", "", "catalogue", "tables"],
     lib: (t) => new DestatisClient({ transport: t, token: "" }).catalogue.tables(),
   });
-  assertBothReject(p, NEEDS_LIB);
+  assertBothReject(p, NO_CREDS_LIB);
 });
 
 test("parity #6: a library method rejects instead of throwing synchronously", () => {
-  const c = new DestatisClient({ transport: async () => jsonResponse({}) });
+  const c = new DestatisClient({ guest: true, transport: async () => jsonResponse({}) });
   let promise: Promise<unknown> | undefined;
   assert.doesNotThrow(() => {
     promise = c.catalogue.tables();
@@ -651,10 +693,11 @@ test("parity #6: a library method rejects instead of throwing synchronously", ()
 });
 
 for (const [label, argv, lib] of [
-  ["hello", ["hello"], (t: Transport) => new DestatisClient({ transport: t }).whoami()],
-  ["find Bev", ["find", "Bev"], (t: Transport) => new DestatisClient({ transport: t }).find({ term: "Bev" })],
+  ["hello", ["hello"], (t: Transport) => new DestatisClient({ guest: true, transport: t }).whoami()],
+  ["--guest hello", ["--guest", "hello"], (t: Transport) => new DestatisClient({ guest: true, transport: t }).whoami()],
+  ["--guest find Bev", ["--guest", "find", "Bev"], (t: Transport) => new DestatisClient({ guest: true, transport: t }).find({ term: "Bev" })],
 ] as const) {
-  test(`parity #6 control: ${label} still works without credentials on both sides`, async () => {
+  test(`parity #6 control: ${label} works without credentials on both sides`, async () => {
     const p = await parity({
       argv: ["--compact", ...argv],
       lib,
@@ -703,7 +746,7 @@ for (const cc of configCases) {
   test(`parity #10: ${cc.label} is a validation error on both sides, with no request`, async () => {
     const p = await parity({
       argv: ["--compact", ...cc.argv, "hello"],
-      lib: (t) => new DestatisClient({ ...cc.opts, transport: t }).whoami(),
+      lib: (t) => new DestatisClient({ ...cc.opts, guest: true, transport: t }).whoami(),
       responder: () => jsonResponse(fx.whoami),
     });
     assertBothReject(p, cc.msg);
@@ -715,7 +758,7 @@ for (const cc of configCases) {
 test("parity #10: a bad base URL message never echoes embedded userinfo", async () => {
   const p = await parity({
     argv: ["--compact", "--base-url", "ftp://SECRETUSER:HUNTER2@h.example", "hello"],
-    lib: (t) => new DestatisClient({ baseUrl: "ftp://SECRETUSER:HUNTER2@h.example", transport: t }).whoami(),
+    lib: (t) => new DestatisClient({ guest: true, baseUrl: "ftp://SECRETUSER:HUNTER2@h.example", transport: t }).whoami(),
   });
   assertBothReject(p);
   assert.doesNotMatch(String(p.lib.ok ? "" : (p.lib.error as Error).message), /SECRETUSER|HUNTER2/);
@@ -723,8 +766,8 @@ test("parity #10: a bad base URL message never echoes embedded userinfo", async 
 
 test("parity #10 control: --timeout 0 --max-retries 10 --max-response-bytes 0 sends the identical request", async () => {
   const p = await parity({
-    argv: ["--compact", "--timeout", "0", "--max-retries", "10", "--max-response-bytes", "0", "find", "Bev"],
-    lib: (t) => new DestatisClient({ timeoutMs: 0, maxRetries: 10, maxResponseBytes: 0, transport: t }).find({ term: "Bev" }),
+    argv: ["--compact", "--guest", "--timeout", "0", "--max-retries", "10", "--max-response-bytes", "0", "find", "Bev"],
+    lib: (t) => new DestatisClient({ guest: true, timeoutMs: 0, maxRetries: 10, maxResponseBytes: 0, transport: t }).find({ term: "Bev" }),
     responder: () => jsonResponse(fx.findResult),
   });
   assertSameRequest(p);

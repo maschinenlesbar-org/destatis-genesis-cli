@@ -123,8 +123,7 @@ export class DestatisApiError extends DestatisError {
   readonly credentialsSent: boolean | undefined;
   /**
    * True when `helloworld/logincheck` answered that the credentials were not accepted
-   * — live, an HTTP 200 whose `Status` is an error text (or whose `Username` echoes the
-   * token back). Such an answer carries no code and no error status, so this flag is
+   * — live, an HTTP 200 whose `Status` is an error text. Such an answer carries no code and no error status, so this flag is
    * what makes it an auth error (`isAuthError`).
    */
   readonly loginRejected: boolean;

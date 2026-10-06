@@ -44,8 +44,9 @@ Every non-`helloworld` response is wrapped:
 `helloworld/whoami` and `helloworld/logincheck` do **not** use this envelope.
 `logincheck` answers HTTP 200 whether or not the credentials are right: its `Status` is a
 text — an error text ("Ein Fehler ist aufgetreten …") means they were rejected, and the
-CLI exits 1 with the credentials hint — and `Username` names the account (a wrong token
-comes back echoed there).
+CLI exits 1 with the credentials hint — and `Username` names the account (the token
+sent may come back echoed there). Only an explicit success or failure text decides; any
+other answer is reported as unconfirmed (exit 1).
 
 ## `Status.Code` values
 
@@ -83,8 +84,12 @@ meaningful statement possible), `()` (limited informative value), `p`
   refused before any request, by the CLI and the library alike.
 - **Account-only endpoints** — `catalogue`, `metadata`, `data` and `logincheck`
   need credentials; without them GENESIS answers 401 + Code `15`, so the CLI and
-  the library refuse the call before any request. `hello` (`whoami`) and `find`
-  work without credentials (`find` as the guest user `GAST`).
+  the library refuse the call before any request.
+- **Guest access** — running without an account, as GENESIS's guest user `GAST`: `find`
+  only (and `hello`, which never sends credentials). It must be asked for explicitly —
+  `--guest` in the CLI, `guest: true` in the library; with neither credentials nor that,
+  the CLI and the library refuse to run instead of falling back to guest, and `--guest`
+  next to a credential is refused too.
 
 See [DEVELOPING.md](DEVELOPING.md) for how credentials are passed on the wire and
 why redirects are not followed.

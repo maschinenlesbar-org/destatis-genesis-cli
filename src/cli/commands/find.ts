@@ -10,7 +10,7 @@ export function registerFindCommand(program: Command, deps: CliDeps): void {
     .command("find")
     .description(
       "Full-text search across statistics, tables, cubes, variables and time series " +
-        "(works without credentials, as the GENESIS guest user)",
+        "(with credentials, or with --guest as the GENESIS guest user)",
     )
     .argument("<term>", "search term (must be non-empty)", parseNonEmpty)
     .addOption(
@@ -21,19 +21,23 @@ export function registerFindCommand(program: Command, deps: CliDeps): void {
       ]),
     )
     // GENESIS serves find/find to anonymous callers as the guest user "GAST"
-    // (verified live 2026-09-26), so the library sends credentials when
-    // configured and does not demand them when absent.
+    // (verified live 2026-09-26): with --guest the search runs without credentials;
+    // without --guest it needs them (no silent guest access).
     .action(
-      action(deps, async ({ client, global, opts }, [term]) => {
-        renderJson(
-          deps,
-          global,
-          await client.find({
-            term: term!,
-            ...(opts["category"] !== undefined ? { category: opts["category"] as FindCategory } : {}),
-            ...commonListParams(global),
-          }),
-        );
-      }),
+      action(
+        deps,
+        async ({ client, global, opts }, [term]) => {
+          renderJson(
+            deps,
+            global,
+            await client.find({
+              term: term!,
+              ...(opts["category"] !== undefined ? { category: opts["category"] as FindCategory } : {}),
+              ...commonListParams(global),
+            }),
+          );
+        },
+        { guest: true },
+      ),
     );
 }

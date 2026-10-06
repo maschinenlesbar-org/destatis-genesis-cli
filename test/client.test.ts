@@ -5,6 +5,7 @@ import { makeMockTransport, jsonResponse, bodyOf, type MockTransport } from "./h
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import * as fx from "./fixtures.js";
 import { DestatisValidationError } from "../src/client/errors.js";
+import { GUEST_WITH_CREDENTIALS_PROBLEM, NO_CREDENTIALS_PROBLEM } from "../src/client/validate.js";
 
 function client(
   responder: (req: HttpRequest) => HttpResponse,
@@ -111,14 +112,45 @@ test("a credential with surrounding whitespace is rejected, never trimmed or sen
   assert.equal(mt.calls.length, 0);
 });
 
+test("the access mode is explicit: credentials or guest: true, never neither, never both", () => {
+  const t = async () => jsonResponse({});
+  for (const options of [{}, { token: "" }, { token: "   " }, { username: " ", password: "" }]) {
+    assert.throws(
+      () => new DestatisClient({ ...options, transport: t }),
+      (err) => err instanceof DestatisValidationError && err.message === `Invalid credentials: ${NO_CREDENTIALS_PROBLEM}`,
+      JSON.stringify(options),
+    );
+  }
+  for (const options of [{ token: "TOK" }, { username: "user" }, { password: "pass" }, { username: "user", password: "pass" }]) {
+    assert.throws(
+      () => new DestatisClient({ ...options, guest: true, transport: t }),
+      (err) => err instanceof DestatisValidationError && err.message === `Invalid credentials: ${GUEST_WITH_CREDENTIALS_PROBLEM}`,
+      JSON.stringify(options),
+    );
+  }
+  for (const guest of ["yes", 1, null]) {
+    assert.throws(() => new DestatisClient({ guest: guest as never, transport: t }), DestatisValidationError);
+  }
+  assert.doesNotThrow(() => new DestatisClient({ guest: true, transport: t }));
+  assert.doesNotThrow(() => new DestatisClient({ guest: false, token: "TOK", transport: t }));
+});
+
+test("a guest client finds without credential headers and calls whoami", async () => {
+  const { c, mt } = client((req) => jsonResponse(req.url.endsWith("/whoami") ? fx.whoami : fx.findResult), { guest: true });
+  await c.find({ term: "Bev" });
+  assert.equal(mt.last().headers?.["username"], undefined);
+  await c.whoami();
+  assert.equal(mt.calls.length, 2);
+});
+
 test("a blank token is treated as unset (no credential header)", async () => {
-  const { c, mt } = client(() => jsonResponse(fx.findResult), { token: "   " });
+  const { c, mt } = client(() => jsonResponse(fx.findResult), { token: "   ", guest: true });
   await c.find({ term: "Bev" });
   assert.equal(mt.last().headers?.["username"], undefined);
 });
 
 test("account-only endpoints reject without credentials, before any request", async () => {
-  const { c, mt } = client(() => jsonResponse(fx.tablesList), { token: "   " });
+  const { c, mt } = client(() => jsonResponse(fx.tablesList), { token: "   ", guest: true });
   const calls: Array<() => Promise<unknown>> = [
     () => c.logincheck(),
     () => c.catalogue.tables(),

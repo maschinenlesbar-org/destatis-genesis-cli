@@ -85,7 +85,7 @@ test("run maps a DestatisValidationError raised during an action to exit 2 with 
 test("parity() runs the CLI and the library on one recording transport", async () => {
   const p = await parity({
     argv: ["--compact", "hello"],
-    lib: (transport) => new DestatisClient({ transport }).whoami(),
+    lib: (transport) => new DestatisClient({ guest: true, transport }).whoami(),
     responder: () => jsonResponse(fx.whoami),
   });
   assert.equal(p.cli.code, 0);

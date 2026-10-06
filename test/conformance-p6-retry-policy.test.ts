@@ -7,7 +7,18 @@ import assert from "node:assert/strict";
 import type { HttpResponse } from "../src/client/http.js";
 
 // ---- adapter (per repo) -------------------------------------------------------------
-import { DestatisClient as Client } from "../src/client/client.js";
+import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
+/**
+ * The client. Without a credential the library wants guest access said explicitly
+ * (`guest: true`, no silent guest), so a client built here without one runs as guest.
+ */
+class Client extends DestatisClient {
+  constructor(options: DestatisClientOptions = {}) {
+    const o = options as DestatisClientOptions | null;
+    const anonymous = typeof o === "object" && o !== null && o.token === undefined && o.username === undefined && o.password === undefined;
+    super(anonymous ? { guest: true, ...o } : options);
+  }
+}
 const call = (client: Client): Promise<unknown> => client.find({ term: "Bevölkerung" });
 const okBody = { Ident: {}, Status: { Code: 0, Content: "erfolgreich", Type: "Information" }, Parameter: {}, Copyright: "", Tables: [] };
 /** The shortest wait before retrying a 429 / a 503 without Retry-After (the documented backoff). */

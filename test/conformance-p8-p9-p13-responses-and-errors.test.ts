@@ -8,7 +8,18 @@ import assert from "node:assert/strict";
 import type { HttpResponse } from "../src/client/http.js";
 
 // ---- adapter (per repo) -------------------------------------------------------------
-import { DestatisClient as Client } from "../src/client/client.js";
+import { DestatisClient, type DestatisClientOptions } from "../src/client/client.js";
+/**
+ * The client. Without a credential the library wants guest access said explicitly
+ * (`guest: true`, no silent guest), so a client built here without one runs as guest.
+ */
+class Client extends DestatisClient {
+  constructor(options: DestatisClientOptions = {}) {
+    const o = options as DestatisClientOptions | null;
+    const anonymous = typeof o === "object" && o !== null && o.token === undefined && o.username === undefined && o.password === undefined;
+    super(anonymous ? { guest: true, ...o } : options);
+  }
+}
 import {
   DestatisError as BaseError,
   DestatisParseError as ParseError,
@@ -61,6 +72,9 @@ const badCalls: Array<[string, () => unknown]> = [
   ["transport: 'x'", () => new Client({ transport: "x" as Any })],
   ["sleep: 5", () => new Client({ sleep: 5 as Any })],
   ["defaultHeaders: 'x'", () => new Client({ defaultHeaders: "x" as Any })],
+  ["guest: 'yes'", () => new DestatisClient({ guest: "yes" as Any })],
+  ["guest: true with a token", () => new DestatisClient({ guest: true, token: TOKEN })],
+  ["no credentials and no guest", () => new DestatisClient({})],
 ];
 // --------------------------------------------------------------------------------------
 

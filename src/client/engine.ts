@@ -417,22 +417,25 @@ export type LoginVerdict =
 
 /**
  * Evaluate a parsed `helloworld/logincheck` answer (P18). GENESIS answers a login check
- * with HTTP 200 whether or not the credentials are right; the outcome is in the body:
+ * with HTTP 200 whether or not the credentials are right; the outcome is in the body,
+ * and only an explicit success or failure decides it:
  *
  *  - `Status` as a **string** (the live shape): an error text means rejected, a success
  *    text accepted;
  *  - `Status` as an **object**, or a flat `{ Code, Content, Type }` (the shape of every
  *    other GENESIS answer and of the auth errors): an error `Type`, or a `Code` other
- *    than 0/22, means rejected;
- *  - **`Username`**, the account the server logged in: it must be a non-empty string.
- *    Live, a wrong token comes back echoed as the `Username`; when the `Status` is
- *    neither a success nor an error text, a `Username` that equals the token sent
- *    (`token`, when the login was by token) counts as rejected too.
+ *    than 0/22, means rejected; Code 0/22 accepted;
+ *  - an accepted answer must also name the account the server logged in: a non-empty
+ *    `Username`. What it holds doesn't matter — live, the server echoes the user name
+ *    or the token sent — so a success text next to the echoed token stays a success.
  *
- * Anything else — no `Status`, an unrecognised text without that echo, no `Username` —
- * is `malformed`: the check confirmed nothing.
+ * Anything else — no `Status`, a text that is neither a success nor an error, a success
+ * without `Username` — is `malformed`: the check confirmed nothing. Nothing is guessed
+ * (an echoed token next to an unrecognised text used to count as rejected; it is
+ * malformed now). The second parameter is ignored; it is kept so existing callers
+ * still compile.
  */
-export function loginVerdict(parsed: unknown, token?: string): LoginVerdict {
+export function loginVerdict(parsed: unknown, _token?: string): LoginVerdict {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { outcome: "malformed", problem: "not a JSON object" };
   }
@@ -454,7 +457,6 @@ export function loginVerdict(parsed: unknown, token?: string): LoginVerdict {
     const errorType = statusType !== undefined && /error|fehler/i.test(statusType);
     verdict = errorType || (code !== undefined && code !== 0 && code !== 22) ? "rejected" : code === undefined ? "unknown" : "accepted";
   }
-  if (verdict === "unknown" && token !== undefined && username === token) verdict = "rejected";
   if (verdict === "rejected") {
     return { outcome: "rejected", detail, ...(code !== undefined ? { code } : {}), ...(statusType !== undefined ? { statusType } : {}) };
   }
@@ -805,7 +807,7 @@ export class RequestEngine {
   /**
    * POST `helloworld/logincheck` and evaluate the answer (`loginVerdict`, P18): resolves
    * only when GENESIS confirms the login. Rejected credentials — live an HTTP 200 whose
-   * `Status` is an error text, the token echoed as `Username` — reject with a
+   * `Status` is an error text — reject with a
    * `DestatisApiError` whose `loginRejected` (and so `isAuthError`) is true; an answer
    * that confirms nothing is a `DestatisParseError`. The 401/404 auth answers and the
    * transport errors keep their usual mapping.
@@ -821,9 +823,7 @@ export class RequestEngine {
     } catch (cause) {
       throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause: scrubThrown(cause, ctx) });
     }
-    // In token mode the token travels alone in the `username` header.
-    const token = authHeaders["password"] === undefined ? authHeaders["username"] : undefined;
-    const verdict = loginVerdict(parsed, token);
+    const verdict = loginVerdict(parsed);
     if (verdict.outcome === "malformed") {
       throw new DestatisParseError(`Unexpected response from ${path}: ${verdict.problem}; the login was not confirmed.`);
     }

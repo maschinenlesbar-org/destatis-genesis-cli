@@ -25,6 +25,7 @@ error (exit 2), not "the last one wins".
 | Flag | Meaning |
 |---|---|
 | `--token <t>` | API token (env `DESTATIS_API_TOKEN`) |
+| `--guest` | run without an account, as the GENESIS guest user — `find` and `hello` only. Required when no credentials are set (no silent guest access); refused together with any credential, flag or `DESTATIS_*` variable (exit 2) |
 | `--username <u>` · `--password <p>` | account login (env `DESTATIS_USERNAME` / `DESTATIS_PASSWORD`; a flag beats its variable per field, so `--username` combines with `DESTATIS_PASSWORD`). Not together with `--token` (usage error, exit 2) |
 | `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo, whitespace or control characters. A remote `http:` URL prints `warning: … sent unencrypted to <host> (http:, not https:)` on stderr once per run, naming `the token` or `the login` when one is sent (never its value); loopback hosts don't warn |
 | `--language <de\|en>` | response language (not sent unless given; the server default is `de`; English data labels are partial) |
@@ -38,15 +39,18 @@ error (exit 2), not "the last one wins".
 ## hello / logincheck
 
 ```bash
-destatis hello           # helloworld/whoami — needs NO credentials
+destatis hello           # helloworld/whoami — needs NO credentials (and no --guest)
 destatis logincheck      # helloworld/logincheck — validates your credentials
 ```
 
 `logincheck` exits **0** only when GENESIS confirms the login. GENESIS answers it
-with HTTP 200 either way; wrong credentials come back as an error text in `Status`
-(and a wrong token echoed as `Username`), which the CLI reports as `GENESIS login
-rejected (HTTP 200) …` plus the credentials hint, exit **1**. An answer that confirms
-nothing (no `Status`, no `Username`) exits 1 without the hint.
+with HTTP 200 either way; wrong credentials come back as an error text in `Status`,
+which the CLI reports as `GENESIS login rejected (HTTP 200) …` plus the credentials
+hint, exit **1**. Only an explicit success text (with a `Username`) or an explicit
+failure decides; anything else — no `Status`, a text that is neither, a success
+without `Username` — exits 1 without the hint (`the login was not confirmed`). A
+`Username` that echoes the token sent doesn't change the verdict either way. With
+`--guest` there is nothing to check: exit 2.
 
 ## find — full-text search
 
@@ -54,8 +58,10 @@ nothing (no `Status`, no `Username`) exits 1 without the hint.
 destatis find <term> [--category all|tables|statistics|cubes|variables|time-series]
 ```
 
-Works **without credentials**: GENESIS answers an anonymous search as its guest
-user `GAST` (credentials are sent when configured). Without `--category` no
+Runs with your credentials, or **without an account when you pass `--guest`**:
+GENESIS answers an anonymous search as its guest user `GAST`. Neither credentials nor
+`--guest` is a usage error (exit 2) — never a silent guest search — and so is
+`--guest` with a credential set. Without `--category` no
 category is sent and GENESIS searches every object type. `--pagelength` bounds the
 result count. Returns parallel arrays
 (`Tables`/`Statistics`/`Cubes`/`Timeseries`/`Variables`), each `null` when not
@@ -64,6 +70,7 @@ searched or when nothing of that type matched: a search without hits answers
 
 ```bash
 destatis find "Bevölkerung" --category tables --pagelength 20
+destatis --guest find "Bevölkerung" --category tables   # without an account
 ```
 
 ## catalogue — browse objects by code

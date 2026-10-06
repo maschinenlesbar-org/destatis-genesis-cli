@@ -16,9 +16,10 @@ They compose: **finder → data-fetch** (or **→ table-download**).
 ## Requirements
 
 - The `destatis` CLI on PATH: `npm install -g @maschinenlesbar.org/destatis-genesis-cli`.
-- **Credentials** (except `destatis hello` and `destatis find`): a free GENESIS account. Set
-  `DESTATIS_API_TOKEN`, or `DESTATIS_USERNAME` + `DESTATIS_PASSWORD`. Register at
-  https://www-genesis.destatis.de. No credential is bundled.
+- **Credentials** (except `destatis hello` and a guest `destatis --guest find`): a free GENESIS
+  account. Set `DESTATIS_API_TOKEN`, or `DESTATIS_USERNAME` + `DESTATIS_PASSWORD`. Register at
+  https://www-genesis.destatis.de. No credential is bundled. Without one, the skills run `find`
+  as guest only by passing `--guest` explicitly; there is no silent fallback.
 
 ## Installing the plugin
 

@@ -13,8 +13,9 @@ compatibility: >
   Requires the `destatis` CLI (npm package
   @maschinenlesbar.org/destatis-genesis-cli) on PATH, installed by the user; the
   skill never installs it. Uses jq for JSON filtering. Network access to
-  genesis.destatis.de. find works without credentials; catalogue and metadata
-  need a registered GENESIS account: --token or DESTATIS_API_TOKEN, or
+  genesis.destatis.de. find runs with an account or, asked for explicitly
+  with --guest, as the GENESIS guest user; catalogue and metadata need a
+  registered GENESIS account: --token or DESTATIS_API_TOKEN, or
   --username/--password or DESTATIS_USERNAME/DESTATIS_PASSWORD.
 ---
 
@@ -30,7 +31,7 @@ This skill drives the `destatis` command. **Before anything else, validate it is
 
 This skill also filters JSON with `jq`. **Validate it too** — run `command -v jq`. If it is missing, inform the user that `jq` is not installed — installing it is their responsibility; never install it yourself — and carry on without it: filter the CLI output with `node -e` instead (Node is already on your PATH, since the CLI runs on it).
 
-**Credentials are required** for everything except `destatis hello` and `destatis find` (GENESIS serves an anonymous search as its guest user `GAST`). GENESIS needs a free registered account. Supply either an API token via `DESTATIS_API_TOKEN` (or `--token`), or a login via `DESTATIS_USERNAME` + `DESTATIS_PASSWORD` (or `--username`/`--password`). There is **no bundled credential** — register at https://www-genesis.destatis.de. A command run without credentials exits `2` with guidance: stop and tell the user rather than retrying. **Wrong credentials exit `1`** with `GENESIS status 2 (ERROR) / HTTP 404 …` (missing or unrecognised ones: `GENESIS status 15 … / HTTP 401`; from `destatis logincheck`: `GENESIS login rejected (HTTP 200) …`) and a `Hint: check your credentials` line — stop and tell the user to check the token or username/password; don't retry. Confirm access with `destatis logincheck`.
+**Credentials are required** for everything except `destatis hello` and a guest `destatis find`. GENESIS needs a free registered account. Supply either an API token via `DESTATIS_API_TOKEN` (or `--token`), or a login via `DESTATIS_USERNAME` + `DESTATIS_PASSWORD` (or `--username`/`--password`) — never `--token` together with `--username`/`--password` (exit `2`). There is **no bundled credential** — register at https://www-genesis.destatis.de. **Guest access is explicit, never a fallback.** Check whether credentials are set without printing them: `[ -n "${DESTATIS_API_TOKEN}${DESTATIS_USERNAME}${DESTATIS_PASSWORD}" ] && echo set || echo unset`. Only when that says `unset` and the user gave you no credentials, run a search as GENESIS's guest user `GAST` by passing `--guest` explicitly (`destatis --guest find …`), and say in your answer that it ran as guest. Never add `--guest` while credentials are set (exit `2`), and never switch to `--guest` on your own after a command with credentials failed. `--guest` covers `find` only: `catalogue`, `metadata`, `data` and `logincheck` refuse it (exit `2`) — stop and tell the user these need an account. A command run with neither credentials nor `--guest` exits `2` with guidance: stop and tell the user rather than retrying. **Wrong credentials exit `1`** with `GENESIS status 2 (ERROR) / HTTP 404 …` (or `/ HTTP 200`; missing or unrecognised ones: `GENESIS status 15 … / HTTP 401`; from `destatis logincheck`: `GENESIS login rejected (HTTP 200) …`) and a `Hint: check your credentials` line — stop and tell the user to check the token or username/password; don't retry. Confirm access with `destatis logincheck`; if it exits `1` without that hint (`the login was not confirmed`), GENESIS's answer was neither a success nor a failure — tell the user, and treat the login as unconfirmed.
 
 Pass `--compact` so each result is one line for `jq`. Add `--language en` for
 English labels (partial). Cite the `Copyright` field from any response you show.
@@ -39,6 +40,8 @@ English labels (partial). Cite the `Copyright` field from any response you show.
 
 ```bash
 destatis --compact find "Bevölkerung" --category tables --pagelength 20
+# no credentials set (see above): ask for guest access explicitly
+destatis --compact --guest find "Bevölkerung" --category tables --pagelength 20
 ```
 
 - `--category` ∈ `all` · `tables` · `statistics` · `cubes` · `variables` ·

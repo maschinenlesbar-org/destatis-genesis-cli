@@ -5,7 +5,10 @@
 // enveloped error statuses and the 401/404 auth answers must all be an auth error — exit 1
 // with the credentials hint, never exit 0 — and an answer that confirms nothing must not
 // pass either. Shared by the GENESIS repos (destatis-genesis-cli, regionalstatistik-cli);
-// only the adapter block differs.
+// only the adapter block differs — except that destatis-genesis-cli decides only on an
+// explicit success or failure (follow-up round 2026-10-06): an echoed token next to an
+// unrecognised text is malformed here, not rejected, and next to a success text it stays
+// a success.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -61,7 +64,6 @@ const REJECTED: Case[] = [
   { label: "200, flat Code 2 ERROR", modes: BOTH, status: 200, body: { Code: 2, Content: FAIL_TEXT, Type: "ERROR" } },
   { label: "200, enveloped Code 15 ERROR", modes: BOTH, status: 200, body: { Status: { Code: 15, Content: NOT_AUTHORIZED_TEXT, Type: "ERROR" } } },
   { label: "200, enveloped Code 2 with a Fehler type", modes: BOTH, status: 200, body: { Status: { Code: "2", Content: FAIL_TEXT, Type: "Fehler" }, Username: USER } },
-  { label: "200, an unrecognised Status with the token echoed as Username", modes: ["token"], status: 200, body: { Status: "Wartungsarbeiten", Username: TOKEN } },
   { label: "live (data endpoints): 404, flat Code 2", modes: BOTH, status: 404, body: { Code: 2, Content: FAIL_TEXT, Type: "ERROR" } },
   { label: "401, flat Code 15", modes: BOTH, status: 401, body: { Code: 15, Content: NOT_AUTHORIZED_TEXT, Type: "ERROR" } },
 ];
@@ -71,11 +73,13 @@ const ACCEPTED: Case[] = [
   { label: "200, string Status success text", modes: BOTH, status: 200, body: { Status: OK_TEXT, Username: "TESTUSER12" } },
   { label: "200, English success text", modes: BOTH, status: 200, body: { Status: "You have been logged in and out successfully!", Username: "TESTUSER12" } },
   { label: "200, enveloped Code 0", modes: BOTH, status: 200, body: { Status: { Code: 0, Content: "erfolgreich", Type: "Information" }, Username: "TESTUSER12" } },
+  { label: "200, string Status success text, the token echoed as Username", modes: ["token"], status: 200, body: { Status: OK_TEXT, Username: TOKEN } },
 ];
 
 /** Answers that confirm nothing: neither accepted nor an auth error. */
 const MALFORMED: Case[] = [
   { label: "an unrecognised Status, another Username", modes: BOTH, status: 200, body: { Status: "Wartungsarbeiten", Username: "someone" } },
+  { label: "an unrecognised Status with the token echoed as Username", modes: ["token"], status: 200, body: { Status: "Wartungsarbeiten", Username: TOKEN } },
   { label: "a success text without Username", modes: BOTH, status: 200, body: { Status: OK_TEXT } },
   { label: "null", modes: BOTH, status: 200, body: null },
   { label: "{}", modes: BOTH, status: 200, body: {} },

@@ -40,17 +40,65 @@ test("hello works without credentials and hits whoami", async () => {
   assert.deepEqual(JSON.parse(cli.out.join("\n")), fx.whoami);
 });
 
-test("a credential-required command with no credentials exits 2 and issues no request", async () => {
-  const cli = makeCli(() => jsonResponse(fx.tablesList));
-  const code = await run(["catalogue", "tables", "124"], cli.deps);
-  assert.equal(code, 2);
-  assert.equal(cli.mt.calls.length, 0);
-  assert.match(cli.err.join("\n"), /needs credentials/);
+test("a command without credentials and without --guest exits 2, naming both ways, and issues no request", async () => {
+  for (const argv of [["catalogue", "tables", "124"], ["find", "Bevölkerung"], ["logincheck"]]) {
+    for (const env of [{}, { DESTATIS_API_TOKEN: "  " }]) {
+      const cli = makeCli(() => jsonResponse(fx.tablesList), env);
+      const code = await run(argv, cli.deps);
+      assert.equal(code, 2, argv.join(" "));
+      assert.equal(cli.mt.calls.length, 0);
+      assert.match(
+        cli.err.join("\n"),
+        /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), or pass --guest/,
+      );
+    }
+  }
 });
 
-test("find works without credentials (GENESIS guest access) and sends no credential header", async () => {
+test("--guest on an account-only command exits 2 before any request", async () => {
+  for (const argv of [["catalogue", "tables", "124"], ["logincheck"], ["metadata", "table", "12411-0001"], ["data", "tablefile", "12411-0001"]]) {
+    const cli = makeCli(() => jsonResponse(fx.tablesList));
+    const code = await run(["--base-url", "http://mirror.example", "--guest", ...argv], cli.deps);
+    assert.equal(code, 2, argv.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), new RegExp(`^Error: \`${argv.slice(0, 2).join(" ").replace(/ 124$| 12411-0001$/, "")}\` needs an account; --guest covers \`find\` only`, "m"));
+    // A usage error: no http warning either.
+    assert.doesNotMatch(cli.err.join("\n"), /^warning: /m);
+  }
+});
+
+test("--guest with any credential (flag or variable) exits 2 naming them, never their values", async () => {
+  for (const [argv, env, named] of [
+    [["--token", "0123456789abcdef0123456789abcdef"], {}, "--token"],
+    [["--username", "flaguser", "--password", "flagpass"], {}, "--username, --password"],
+    [[], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }, "DESTATIS_API_TOKEN"],
+    [[], { DESTATIS_PASSWORD: "envpass1" }, "DESTATIS_PASSWORD"],
+    // A malformed variable is a credential too: no fallback to guest.
+    [[], { DESTATIS_API_TOKEN: " bad-token " }, "DESTATIS_API_TOKEN"],
+  ] as const) {
+    for (const command of [["find", "Bev"], ["hello"]]) {
+      const cli = makeCli(() => jsonResponse(fx.findResult), { ...env });
+      const code = await run(["--guest", ...argv, ...command], cli.deps);
+      assert.equal(code, 2, `${argv.join(" ")} ${JSON.stringify(env)} ${command[0]}`);
+      assert.equal(cli.mt.calls.length, 0);
+      const err = cli.err.join("\n");
+      assert.ok(err.includes(`--guest cannot be combined with credentials (${named} set)`), err);
+      assert.doesNotMatch(err, /0123456789abcdef|flagpass|envpass1|bad-token/);
+    }
+  }
+});
+
+test("a malformed credential variable still fails find without --guest (no fallback to guest)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.findResult), { DESTATIS_API_TOKEN: " bad-token " });
+  const code = await run(["find", "Bev"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /Environment variable DESTATIS_API_TOKEN has leading or trailing whitespace/);
+});
+
+test("--guest find runs as the GENESIS guest user and sends no credential header", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult));
-  const code = await run(["find", "Bevölkerung", "--category", "tables"], cli.deps);
+  const code = await run(["--guest", "find", "Bevölkerung", "--category", "tables"], cli.deps);
   assert.equal(code, 0);
   const req = cli.mt.last();
   assert.equal(new URL(req.url).pathname, "/genesisWS/rest/2020/find/find");
@@ -348,7 +396,7 @@ test("hello (no credentials sent) gets no credentials hint on a 401/403", async 
 
 test("a guest find refused with 401 + Code 15 hints that credentials are needed", async () => {
   const cli = makeCli(() => jsonResponse(fx.flatNotAuthorized, 401));
-  const code = await run(["find", "x"], cli.deps);
+  const code = await run(["--guest", "find", "x"], cli.deps);
   assert.equal(code, 1);
   const errText = cli.err.join("\n");
   assert.match(errText, /Hint: GENESIS refused the request without credentials\. Set --token/);
@@ -489,21 +537,21 @@ test("a deeply nested response fails pretty-printing cleanly and still prints wi
   const text = '{"Status":{"Code":0,"Content":"ok","Type":"Information"},"Tables":' + "[".repeat(depth) + "]".repeat(depth) + "}";
   const deep = () => rawResponse(text, "application/json");
   const pretty = makeCli(deep);
-  assert.equal(await run(["find", "x"], pretty.deps), 1);
+  assert.equal(await run(["--guest", "find", "x"], pretty.deps), 1);
   assert.deepEqual(pretty.out, []);
   assert.equal(pretty.err.join("\n"), "Error: The response is nested too deeply to pretty-print; try --compact.");
 
   // Compact serialisation goes much deeper (it prints this one on current Node);
   // should a runtime's stack still be too small, it must fail just as cleanly.
   const compact = makeCli(deep);
-  const code = await run(["--compact", "find", "x"], compact.deps);
+  const code = await run(["--guest", "--compact", "find", "x"], compact.deps);
   if (code === 0) assert.equal(compact.out.join("").length, text.length);
   else assert.equal(compact.err.join("\n"), "Error: The response is nested too deeply to print.");
 });
 
 test("an empty 200 reply exits 1 instead of printing null", async () => {
   const cli = makeCli(() => rawResponse("", "application/json"));
-  const code = await run(["find", "x"], cli.deps);
+  const code = await run(["--guest", "find", "x"], cli.deps);
   assert.equal(code, 1);
   assert.deepEqual(cli.out, []);
   assert.match(cli.err.join("\n"), /Empty response body from \/genesisWS\/rest\/2020\/find\/find/);
@@ -579,7 +627,7 @@ test("a --base-url with a query, fragment or surrounding whitespace is a usage e
 
 test("a --base-url with a path prefix still works", async () => {
   const cli = makeCli(() => jsonResponse(fx.findResult));
-  assert.equal(await run(["--base-url", "http://mirror.test/genesis/", "find", "x"], cli.deps), 0);
+  assert.equal(await run(["--base-url", "http://mirror.test/genesis/", "--guest", "find", "x"], cli.deps), 0);
   assert.equal(cli.mt.last().url, "http://mirror.test/genesis/genesisWS/rest/2020/find/find");
 });
 
@@ -636,7 +684,7 @@ for (const { label, argv } of BLANK_CASES) {
 
 test("-o - writes to stdout and creates no file named '-' (P12)", async () => {
   const json = makeCli(() => jsonResponse(fx.findResult));
-  assert.equal(await run(["-o", "-", "--compact", "find", "x"], json.deps), 0, json.err.join("\n"));
+  assert.equal(await run(["-o", "-", "--compact", "--guest", "find", "x"], json.deps), 0, json.err.join("\n"));
   assert.equal(json.files.size, 0);
   assert.deepEqual(JSON.parse(json.out.join("")), fx.findResult);
   const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
@@ -653,7 +701,7 @@ test("P20: a remote http base URL warns once, naming what travels: nothing, the 
     assert.equal(code, 0, cli.err.join("\n"));
     return cli.err.filter((l) => l.startsWith("warning: "));
   };
-  assert.deepEqual(await warningsOf(["find", "x"]), [
+  assert.deepEqual(await warningsOf(["--guest", "find", "x"]), [
     "warning: requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
   ]);
   assert.deepEqual(await warningsOf(["find", "x"], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }), [

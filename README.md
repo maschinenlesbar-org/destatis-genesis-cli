@@ -37,9 +37,14 @@ username/password — except that a `--username`/`--password` **flag** beats a t
 from `DESTATIS_API_TOKEN`, so the account you name on the command line is the one
 used. Per field means `--username` combines with `DESTATIS_PASSWORD`. A `--token`
 flag together with a `--username` or `--password` flag is refused (exit 2): pass one
-login, not two. `destatis hello` and `destatis find` work without credentials (GENESIS
-serves anonymous searches as its guest user `GAST`); `catalogue`, `metadata`,
-`data` and `logincheck` need an account. Credentials are sent exactly as given: a
+login, not two.
+
+**Without an account, say so: `--guest`.** `destatis --guest find …` searches as
+GENESIS's guest user `GAST`; `catalogue`, `metadata`, `data` and `logincheck` need an
+account and refuse `--guest` (exit 2). There is no silent fallback: a command run with
+neither credentials nor `--guest` exits 2 naming both ways, and `--guest` together with
+a credential — a flag, or a set `DESTATIS_*` variable — exits 2 too. `destatis hello`
+sends no credentials and needs neither. Credentials are sent exactly as given: a
 blank credential flag, or one with leading or trailing whitespace (which an HTTP
 header cannot carry), is refused with exit 2; a blank env var counts as unset. A
 malformed variable fails only a command that uses it: `--help`, `--version` and
@@ -72,6 +77,7 @@ unchanged. The library exports the same check as `cleartextProblem(baseUrl, secr
 destatis hello                                  # connectivity check (no auth)
 destatis logincheck                             # validate your credentials
 destatis find "Bevölkerung" --category tables   # search for tables
+destatis --guest find "Bevölkerung"             # search without an account
 destatis catalogue tables "124*"                # browse tables by code
 destatis metadata table 12411-0001              # describe a table
 destatis data table 12411-0001 --start-year 2020 --compact
@@ -92,7 +98,14 @@ const genesis = new DestatisClient({ token: process.env.DESTATIS_API_TOKEN });
 const hits = await genesis.find({ term: "Bevölkerung", category: "tables" });
 const table = await genesis.data.table("12411-0001", { startyear: "2020" });
 // table.Object.Content is the table as a ";"-delimited CSV string.
+
+const guest = new DestatisClient({ guest: true }); // whoami() and find() only
 ```
+
+The access mode is explicit: a client needs credentials (`token`, or `username` +
+`password`) or `guest: true`. With neither — e.g. an unset or empty
+`DESTATIS_API_TOKEN` — the constructor throws `DestatisValidationError` instead of
+quietly running as guest, and `guest: true` with a credential throws too.
 
 Each call accepts only the parameter keys of its endpoint: GENESIS ignores one it
 does not know (a misspelt `startYear`) and would answer unfiltered, so the client

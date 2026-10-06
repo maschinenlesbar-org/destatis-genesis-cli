@@ -90,9 +90,9 @@ What the library rejects:
   characters (CR/LF included, tab allowed) and within Latin-1; a `defaultHeaders`
   name must be an HTTP token. Only `userAgent: undefined` selects the default. A
   `token`/`username`/`password` must also have no leading or trailing whitespace.
-  A *blank* credential still counts as unset in the library (so
-  `token: process.env.DESTATIS_API_TOKEN` works with an empty variable), and so
-  does a blank credential env var in the CLI; only a blank credential *flag* is a
+  A *blank* credential still counts as unset in the library (an empty
+  `token: process.env.DESTATIS_API_TOKEN` is no token — and then, without `guest:
+  true`, no access mode, see below), and so does a blank credential env var in the CLI; only a blank credential *flag* is a
   CLI usage error, because it would silently cancel an env credential. Messages
   never echo the value. The CLI's `parseHeaderValue`/`parseCredential` (and the
   env-var check, `checkEnvCredentials` in `shared.ts`) call the same rules. A
@@ -102,7 +102,8 @@ What the library rejects:
   sends no credentials, `action(…, { credentials: false })`) never fail on it, and
   neither does a run whose flag overrides it. `find` does use configured
   credentials, so a malformed variable still stops it rather than silently
-  searching as the guest user. The secret flags use
+  searching as the guest user (and with `--guest` a set variable, malformed or
+  not, is a conflict). The secret flags use
   `parseSecret`, which throws `DestatisUsageError` naming the flag and the reason
   only (commander's own wording, `argument '<value>' is invalid`, would print the
   password).
@@ -156,13 +157,27 @@ What the library rejects:
   username used to go out in the token's wire format, a lone password was dropped.
   The CLI's `resolveCredentials` keeps only the flag > env precedence; `action()`
   builds the client first and rewords this error with the flags and env vars.
+- **The access mode is explicit** (`accessModeProblem`, follow-up round
+  2026-10-06: "no fallbacks … make no auth usecase explicit"): a client runs with
+  credentials or with `guest: true`, chosen by the caller. Neither throws at
+  construction — `Invalid credentials: No credentials: pass a token, a username and
+  password, or guest: true for guest access (whoami and find only).`
+  (`NO_CREDENTIALS_PROBLEM`) — and so does `guest: true` with any credential
+  (`GUEST_WITH_CREDENTIALS_PROBLEM`); `guest` must be a boolean. Until 0.3.0 a client
+  without credentials silently ran as guest, so an unset variable turned an account
+  search into a guest one. The CLI mirrors it with `--guest`: `action()` refuses
+  `--guest` next to a credential flag or a set variable (`checkGuestAlone`, naming
+  them, never the values), refuses it on a command guest access doesn't cover (only
+  `find` passes `{ guest: true }`) before any request, and rewords the library's
+  `NO_CREDENTIALS_PROBLEM` with the flags, variables and `--guest`. `hello` sends no
+  credentials and needs neither (its client is always a guest client).
 - **No credentials for an account-only endpoint** (`credentialsRequiredProblem`):
   `catalogue.*`, `metadata.*`, `data.*` and `logincheck()` reject before any
   request when the client has no credentials (a blank one counts as none) —
   `Invalid credentials: This endpoint needs an account (a token, or a username and
   password).` Anonymously GENESIS would answer 401 + Code 15 after the round trip.
-  `whoami()` and `find()` keep their optional credentials. The CLI has no guard of
-  its own: `action()` rewords this error with the flags, env vars and signup URL.
+  A guest client reaches this only from the library; the CLI refuses `--guest` on
+  those commands first. `whoami()` and `find()` work in either mode.
 
 Text is sent in Unicode NFC (P11): every string parameter and the object `name` are
 normalised (`normalizeText` in `client.ts`), nothing else — no trimming, values go out
@@ -194,9 +209,9 @@ authenticated call is a **`POST`** with:
 
 Only `helloworld/whoami` is an unauthenticated **`GET`**. `find/find` is a POST
 that GENESIS also serves without credentials, as its guest user `GAST` (checked
-live 2026-09-26; `catalogue`/`metadata`/`data` answer 401 + Code 15 then), so the
-client's `find()` does not demand credentials while the account-only groups do
-(`requireAuth()` in `client.ts`, see above). The client
+live 2026-09-26; `catalogue`/`metadata`/`data` answer 401 + Code 15 then), so a
+guest client (`guest: true`, CLI `--guest`) may call `find()` while the account-only
+groups demand credentials (`requireAuth()` in `client.ts`, see above). The client
 (`client.ts`) supplies the credential headers via `postJson`/`postRaw`; the CLI
 resolves credentials with precedence **flag > env > unset** (`--token` seeded from
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; values checked by the library's
@@ -286,14 +301,19 @@ server logged in. Live (2026-10-05), wrong credentials give `{"Status":"Ein Fehl
 aufgetreten. (Bitte prüfen und korrigieren Sie Ihren Nutzernamen oder Ihren Token bzw.
 das Passwort.)","Username":"<the token, or the user name sent>"}`; a good login
 `{"Status":"Sie wurden erfolgreich an- und abgemeldet!","Username":"…"}`.
-`engine.ts:postLoginCheck` evaluates it with `loginVerdict` (exported): an error text,
-an error `Type` or a `Code` other than 0/22 (string, enveloped or flat `Status`), or an
-unrecognised text with the token echoed as `Username`, is a `DestatisApiError` with
-`loginRejected` (so `isAuthError`: exit 1 + credentials hint); a success text (or Code
-0) with a non-empty `Username` resolves; anything else confirms nothing and is a
-`DestatisParseError`. A success text wins over the token echo, since whether GENESIS
-echoes a *valid* token is unknown (no account to check). Shared with
-regionalstatistik-cli: `test/conformance-p18-genesis-access-check.test.ts`.
+`engine.ts:postLoginCheck` evaluates it with `loginVerdict` (exported), and only an
+explicit outcome decides: an error text, an error `Type` or a `Code` other than 0/22
+(string, enveloped or flat `Status`) is a `DestatisApiError` with `loginRejected` (so
+`isAuthError`: exit 1 + credentials hint); a success text (or Code 0/22) with a
+non-empty `Username` resolves, whatever the `Username` holds — an echoed token next to a
+success text stays a success; anything else confirms nothing and is a
+`DestatisParseError` (exit 1, no hint). Nothing is guessed: until the follow-up round of
+2026-10-06 an unrecognised text with the token echoed as `Username` counted as
+rejected; it is malformed now (`loginVerdict`'s second parameter is ignored, kept for
+callers). Shared with regionalstatistik-cli:
+`test/conformance-p18-genesis-access-check.test.ts` — this repo's copy moves that
+echo case from "rejected" to "malformed" and adds "success text + echoed token" to
+"accepted"; regionalstatistik-cli keeps its word-and-echo rule.
 
 Key off the numeric `Code`, never the German/English `Type` text alone.
 `DestatisApiError` carries both an optional HTTP `httpStatus` (transport/auth

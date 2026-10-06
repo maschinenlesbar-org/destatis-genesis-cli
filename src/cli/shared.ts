@@ -10,6 +10,8 @@ import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
 import {
   BASE_URL_USERINFO_PROBLEM,
+  GUEST_WITH_CREDENTIALS_PROBLEM,
+  NO_CREDENTIALS_PROBLEM,
   baseUrlProblem,
   CREDENTIAL_PAIR_PROBLEM,
   credentialProblem,
@@ -116,6 +118,7 @@ export interface GlobalOptions {
   token?: string;
   username?: string;
   password?: string;
+  guest?: boolean;
   language?: Language;
   pagelength?: number;
   timeout?: number;
@@ -208,9 +211,15 @@ export function checkEnvCredentials(creds: ResolvedCredentials, sources: Record<
   }
 }
 
+/** The usage error for a run with neither credentials nor `--guest` (no silent guest access). */
+export const NO_CREDENTIALS_MESSAGE =
+  "No credentials. Set --token (env DESTATIS_API_TOKEN) or --username/--password " +
+  "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), or pass --guest to run without an account " +
+  "(guest access covers `find` only). A free account is available at https://www-genesis.destatis.de.";
+
 /**
- * Build the client, rewording the library's credential-pair error with the
- * flags and env vars that supply the pair.
+ * Build the client, rewording the library's credential errors (a half pair, no
+ * access mode, guest with credentials) with the flags and env vars.
  */
 function createClient(deps: CliDeps, options: DestatisClientOptions): ReturnType<CliDeps["createClient"]> {
   try {
@@ -222,6 +231,12 @@ function createClient(deps: CliDeps, options: DestatisClientOptions): ReturnType
           "Env: DESTATIS_USERNAME + DESTATIS_PASSWORD, or DESTATIS_API_TOKEN.",
         { cause: err },
       );
+    }
+    if (err instanceof DestatisValidationError && err.message.endsWith(NO_CREDENTIALS_PROBLEM)) {
+      throw new DestatisUsageError(NO_CREDENTIALS_MESSAGE, { cause: err });
+    }
+    if (err instanceof DestatisValidationError && err.message.endsWith(GUEST_WITH_CREDENTIALS_PROBLEM)) {
+      throw new DestatisUsageError("--guest cannot be combined with credentials.", { cause: err });
     }
     throw err;
   }
@@ -238,6 +253,7 @@ export function toClientOptions(global: GlobalOptions, creds: ResolvedCredential
   if (creds.token !== undefined) options.token = creds.token;
   if (creds.username !== undefined) options.username = creds.username;
   if (creds.password !== undefined) options.password = creds.password;
+  if (global.guest === true) options.guest = true;
   return options;
 }
 
@@ -429,12 +445,45 @@ async function withCredentialsHint(body: () => Promise<void>): Promise<void> {
   }
 }
 
+/** The command as typed after the program name (`catalogue tables`, `logincheck`). */
+function commandPath(command: Command): string {
+  const names: string[] = [];
+  for (let c: Command | null = command; c?.parent; c = c.parent) names.unshift(c.name());
+  return names.join(" ");
+}
+
+/**
+ * `--guest` is an explicit choice of anonymous access, so a credential next to it —
+ * a flag, or a set variable — is a contradiction, not something to pick from: a usage
+ * error naming the flags and variables (never their values).
+ */
+function checkGuestAlone(global: GlobalOptions, root: Command): void {
+  if (global.guest !== true) return;
+  const given: string[] = [];
+  for (const key of ["token", "username", "password"] as const) {
+    if (nonBlank(global[key]) === undefined) continue;
+    given.push(root.getOptionValueSource(key) === "env" ? CREDENTIAL_ENV_VARS[key] : `--${key}`);
+  }
+  if (given.length > 0) {
+    throw new DestatisUsageError(
+      `--guest cannot be combined with credentials (${given.join(", ")} set). ` +
+        "Drop --guest to use them, or unset them to run as guest.",
+    );
+  }
+}
+
 /**
  * Wrap an async command action with credential resolution and client
  * construction. The callback receives a context (client + resolved global
- * options + this command's options) and the positional args. Which commands need
- * credentials is the library's rule: an account-only call rejects before any
- * request, and the error is reworded here with the flags and env vars.
+ * options + this command's options) and the positional args.
+ *
+ * Access is explicit (no silent guest): a command that sends credentials runs with
+ * credentials (flags or env vars) or with `--guest`; neither is a usage error
+ * naming both ways (the library's `NO_CREDENTIALS_PROBLEM`, reworded), and so is
+ * `--guest` together with a credential. `options.guest` marks the commands guest
+ * access covers (`find`); any other is refused with `--guest` before any request.
+ * `options.credentials: false` is a command that sends none (`hello`): it needs
+ * neither, but still refuses `--guest` with a credential.
  *
  * Commander invokes actions as (arg1, ..., argN, options, command); we slice off
  * the trailing options object and command instance to recover the positionals.
@@ -442,22 +491,29 @@ async function withCredentialsHint(body: () => Promise<void>): Promise<void> {
 export function action(
   deps: CliDeps,
   fn: (ctx: ActionContext, positionals: string[]) => Promise<void>,
-  options: { credentials?: boolean } = {},
+  options: { credentials?: boolean; guest?: boolean } = {},
 ): (...args: unknown[]) => Promise<void> {
   return async (...args: unknown[]) => {
     const command = args[args.length - 1] as Command;
     const positionals = args.slice(0, Math.max(0, args.length - 2)) as string[];
     const global = command.optsWithGlobals() as GlobalOptions;
+    const root = rootCommand(command);
+    checkGuestAlone(global, root);
     // A command that sends no credentials (`hello`) neither reads nor checks them, so
-    // a malformed or half-set variable can't stop it.
+    // a malformed or half-set variable can't stop it. It always runs as guest.
     if (options.credentials === false) {
-      const client = deps.createClient(toClientOptions(global, { present: false }));
+      const client = deps.createClient({ ...toClientOptions(global, { present: false }), guest: true });
       warnArgvCredentials(deps, command);
       warnCleartext(deps, global, { present: false });
       await fn({ client, global, opts: command.opts() }, positionals);
       return;
     }
-    const root = rootCommand(command);
+    if (global.guest === true && options.guest !== true) {
+      throw new DestatisUsageError(
+        `\`${commandPath(command)}\` needs an account; --guest covers \`find\` only. ` +
+          "Set --token (env DESTATIS_API_TOKEN) or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD).",
+      );
+    }
     const sources = {
       token: root.getOptionValueSource("token"),
       username: root.getOptionValueSource("username"),
@@ -470,13 +526,17 @@ export function action(
         "--token cannot be combined with --username/--password: pass either a token or a username and password.",
       );
     }
-    const creds = resolveCredentials(global, {
-      token: sources.token === "cli",
-      username: sources.username === "cli",
-      password: sources.password === "cli",
-    });
+    const creds: ResolvedCredentials =
+      global.guest === true
+        ? { present: false }
+        : resolveCredentials(global, {
+            token: sources.token === "cli",
+            username: sources.username === "cli",
+            password: sources.password === "cli",
+          });
     checkEnvCredentials(creds, sources);
-    // A half username/password pair gets the library's pair error, reworded.
+    // No credentials without --guest, or half a username/password pair, gets the
+    // library's error, reworded.
     const client = createClient(deps, toClientOptions(global, creds));
     if (creds.present) warnArgvCredentials(deps, command);
     warnCleartext(deps, global, creds);

@@ -16,7 +16,7 @@ const BIN = fileURLToPath(new URL("../src/cli/index.js", import.meta.url));
 /** argv for a usage error, and its exit code. */
 const USAGE = { argv: ["--no-such-option"], exit: 2 };
 /** argv that prints the server's big answer, given the mock's base URL (a guest find: no credentials). */
-const bigOutputArgv = (base: string): string[] => ["--base-url", base, "find", "Bevölkerung"];
+const bigOutputArgv = (base: string): string[] => ["--base-url", base, "--guest", "find", "Bevölkerung"];
 /** A large answer for that command (≈ 1 MB of JSON). */
 const bigBody = (): unknown => ({
   Status: { Code: 0, Content: "erfolgreich", Type: "Information" },
