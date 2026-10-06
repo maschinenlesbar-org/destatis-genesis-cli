@@ -25,7 +25,7 @@ error (exit 2), not "the last one wins".
 | Flag | Meaning |
 |---|---|
 | `--token <t>` | API token (env `DESTATIS_API_TOKEN`) |
-| `--username <u>` · `--password <p>` | account login (env `DESTATIS_USERNAME` / `DESTATIS_PASSWORD`) |
+| `--username <u>` · `--password <p>` | account login (env `DESTATIS_USERNAME` / `DESTATIS_PASSWORD`; a flag beats its variable per field, so `--username` combines with `DESTATIS_PASSWORD`). Not together with `--token` (usage error, exit 2) |
 | `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo, whitespace or control characters. A remote `http:` URL prints `warning: … sent unencrypted to <host> (http:, not https:)` on stderr once per run, naming `the token` or `the login` when one is sent (never its value); loopback hosts don't warn |
 | `--language <de\|en>` | response language (not sent unless given; the server default is `de`; English data labels are partial) |
 | `--pagelength <n>` | max list results, `1..25000` (server default 100) |

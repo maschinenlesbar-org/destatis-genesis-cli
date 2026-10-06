@@ -35,7 +35,9 @@ credential is bundled with this tool.
 Precedence per field is **flag > env var > unset**; a token takes precedence over
 username/password — except that a `--username`/`--password` **flag** beats a token
 from `DESTATIS_API_TOKEN`, so the account you name on the command line is the one
-used. `destatis hello` and `destatis find` work without credentials (GENESIS
+used. Per field means `--username` combines with `DESTATIS_PASSWORD`. A `--token`
+flag together with a `--username` or `--password` flag is refused (exit 2): pass one
+login, not two. `destatis hello` and `destatis find` work without credentials (GENESIS
 serves anonymous searches as its guest user `GAST`); `catalogue`, `metadata`,
 `data` and `logincheck` need an account. Credentials are sent exactly as given: a
 blank credential flag, or one with leading or trailing whitespace (which an HTTP

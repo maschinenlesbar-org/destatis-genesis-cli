@@ -153,7 +153,10 @@ export interface CredentialSources {
  * username/password — except that a `--username`/`--password` **flag** beats a
  * token that only came from `DESTATIS_API_TOKEN`: the account named on the
  * command line is the one the user means, so an env token must not silently
- * authenticate as someone else. (An explicit `--token` flag still wins.)
+ * authenticate as someone else. (A `--token` flag beats an env username/password;
+ * a `--token` flag together with a `--username`/`--password` flag is refused by
+ * {@link action} before this runs.) Per field, a flag beats its variable, so
+ * `--username` combines with `DESTATIS_PASSWORD`.
  * Precedence only: a lone username or password is passed on as is, and the
  * library's pair rule rejects it when the client is built (see {@link action}).
  * No credentials at all is allowed here — the library rejects an account-only
@@ -460,6 +463,13 @@ export function action(
       username: root.getOptionValueSource("username"),
       password: root.getOptionValueSource("password"),
     };
+    // --token and --username/--password on one command line name two different logins;
+    // which one is meant can't be told, so neither is picked.
+    if (sources.token === "cli" && (sources.username === "cli" || sources.password === "cli")) {
+      throw new DestatisUsageError(
+        "--token cannot be combined with --username/--password: pass either a token or a username and password.",
+      );
+    }
     const creds = resolveCredentials(global, {
       token: sources.token === "cli",
       username: sources.username === "cli",

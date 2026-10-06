@@ -142,11 +142,31 @@ test("a lone --username flag with an env token is a usage error, not a silent to
   assert.match(cli.err.join("\n"), /BOTH --username and --password/);
 });
 
-test("an explicit --token flag still beats --username/--password flags", async () => {
-  const cli = makeCli(() => jsonResponse(fx.loginOk));
-  await run([...TOKEN, "--username", "u", "--password", "p", "logincheck"], cli.deps);
+test("a --token flag together with a --username or --password flag is a usage error", async () => {
+  for (const pair of [["--username", "flaguser", "--password", "flagpass"], ["--username", "flaguser"], ["--password", "flagpass"]]) {
+    const cli = makeCli(() => jsonResponse(fx.loginOk));
+    const code = await run([...TOKEN, ...pair, "logincheck"], cli.deps);
+    assert.equal(code, 2, pair.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /--token cannot be combined with --username\/--password/);
+    assert.doesNotMatch(cli.err.join("\n"), /flagpass|0123456789abcdef/);
+  }
+});
+
+test("a --token flag beats DESTATIS_USERNAME/DESTATIS_PASSWORD from the environment", async () => {
+  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass" });
+  const code = await run([...TOKEN, "logincheck"], cli.deps);
+  assert.equal(code, 0);
   assert.equal(cli.mt.last().headers?.["username"], "0123456789abcdef0123456789abcdef");
   assert.equal(cli.mt.last().headers?.["password"], undefined);
+});
+
+test("a --username flag combines with DESTATIS_PASSWORD (flag wins per field)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.loginOk), { DESTATIS_USERNAME: "envuser", DESTATIS_PASSWORD: "envpass" });
+  const code = await run(["--username", "flaguser", "logincheck"], cli.deps);
+  assert.equal(code, 0);
+  assert.equal(cli.mt.last().headers?.["username"], "flaguser");
+  assert.equal(cli.mt.last().headers?.["password"], "envpass");
 });
 
 test("with env credentials only, DESTATIS_API_TOKEN still beats DESTATIS_USERNAME/PASSWORD", async () => {

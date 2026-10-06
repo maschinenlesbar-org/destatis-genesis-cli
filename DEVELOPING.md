@@ -202,7 +202,10 @@ resolves credentials with precedence **flag > env > unset** (`--token` seeded fr
 `DESTATIS_API_TOKEN`, etc., in `program.ts`; values checked by the library's
 `credentialProblem`, precedence in `shared.ts:resolveCredentials`). A token wins over username/password, except that
 a `--username`/`--password` *flag* beats an env-only token (commander's value
-source tells flag from env); supplying only one of username/password is
+source tells flag from env). Per field a flag beats its variable, so `--username`
+combines with `DESTATIS_PASSWORD`. A `--token` flag together with a `--username` or
+`--password` flag is a usage error (exit 2, no request): two logins on one command
+line, and which is meant can't be told. Supplying only one of username/password is
 rejected by the library (see below) and reworded by the CLI with the flags (exit 2).
 
 Two things the transport MUST get right (both found by live testing):
