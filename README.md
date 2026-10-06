@@ -57,6 +57,13 @@ wherever they would appear — a usage error, an unknown command, the server's e
 export DESTATIS_API_TOKEN="your-32-char-token"
 ```
 
+**Base URL.** `--base-url` (default `https://genesis.destatis.de`) points the CLI
+at another GENESIS host. A plain `http:` base URL on a remote host gets one
+`warning:` line on stderr per run, naming the host and what travels unencrypted
+with the requests (`the token`, `the login`), never its value; loopback hosts
+(`localhost`, `127.0.0.0/8`, `::1`) don't warn. stdout and the exit code are
+unchanged. The library exports the same check as `cleartextProblem(baseUrl, secrets)`.
+
 ## Quickstart
 
 ```bash

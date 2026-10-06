@@ -625,3 +625,32 @@ test("-o - writes to stdout and creates no file named '-' (P12)", async () => {
   assert.equal(raw.files.size, 0);
   assert.match(raw.err.join("\n"), /Wrote 6 bytes to stdout/);
 });
+
+test("P20: a remote http base URL warns once, naming what travels: nothing, the token or the login", async () => {
+  const warningsOf = async (argv: string[], env: Record<string, string> = {}) => {
+    const cli = makeCli((req) => jsonResponse(req.url.endsWith("/whoami") ? fx.whoami : fx.findResult), env);
+    const code = await run(["--base-url", "http://mirror.example:8080", ...argv], cli.deps);
+    assert.equal(code, 0, cli.err.join("\n"));
+    return cli.err.filter((l) => l.startsWith("warning: "));
+  };
+  assert.deepEqual(await warningsOf(["find", "x"]), [
+    "warning: requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
+  ]);
+  assert.deepEqual(await warningsOf(["find", "x"], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }), [
+    "warning: the token is sent unencrypted to mirror.example:8080 (http:, not https:)",
+  ]);
+  assert.deepEqual(await warningsOf(["find", "x"], { DESTATIS_USERNAME: "testuser01", DESTATIS_PASSWORD: "s3cret-Test-Pw" }), [
+    "warning: the login is sent unencrypted to mirror.example:8080 (http:, not https:)",
+  ]);
+  // hello never sends credentials, so its warning names none even when they are set.
+  assert.deepEqual(await warningsOf(["hello"], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }), [
+    "warning: requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
+  ]);
+});
+
+test("P20: a usage error does not warn about http", async () => {
+  const cli = makeCli(() => jsonResponse(fx.tablesList));
+  const code = await run(["--base-url", "http://mirror.example", "catalogue", "tables", "--username", "USER123456"], cli.deps);
+  assert.equal(code, 2);
+  assert.deepEqual(cli.err.filter((l) => l.startsWith("warning: ")), []);
+});

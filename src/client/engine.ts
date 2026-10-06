@@ -241,6 +241,38 @@ export function redactUrl(rawUrl: string): string {
   }
 }
 
+/** True for a loopback host: `localhost`, 127.0.0.0/8 or `::1` (as `URL.hostname` spells them). */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "[::1]" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+}
+
+/**
+ * Why requests to `baseUrl` travel unencrypted, as one sentence (without a
+ * `warning: ` prefix), or `undefined` when they don't: for an `https:` URL, a URL
+ * that doesn't parse, and a loopback host (`localhost`, 127.0.0.0/8, `::1` — a
+ * local mock or proxy). Otherwise the sentence names the host (`url.host`: host
+ * and port, never userinfo) and what secret goes with the requests: `secrets` are
+ * noun phrases such as `"the token"` or `"the login"`, and userinfo in the URL adds
+ * `"the base URL's credentials"`. It never contains a secret's value. The CLI
+ * prints it once per run as `warning: <sentence>` on stderr.
+ */
+export function cleartextProblem(baseUrl: string, secrets: readonly string[] = []): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "http:" || isLoopbackHost(url.hostname)) return undefined;
+  const sent = [...secrets];
+  if (url.username !== "" || url.password !== "") sent.push("the base URL's credentials");
+  const plain = "(http:, not https:)";
+  if (sent.length === 0) return `requests to ${url.host} are sent unencrypted ${plain}`;
+  const verb = sent.length === 1 && !sent[0]!.endsWith("credentials") ? "is" : "are";
+  return `${sent.join(" and ")} ${verb} sent unencrypted to ${url.host} ${plain}`;
+}
+
 /**
  * Guidance for a "too large" (98) reply, phrased for the endpoint: only the
  * `data/*` endpoints have year/time-slice/classifying filters (the CLI's

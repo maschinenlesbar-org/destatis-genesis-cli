@@ -351,6 +351,14 @@ for every transport (P5):
 - **`--base-url`** accepts only `http:`/`https:`. Pointing it at the sibling
   Regionalstatistik/Zensus installations is possible but out of scope; the data
   terms may differ (rely on the response `Copyright`).
+- **Plain `http:` warns** (P20): `cleartextProblem(baseUrl, secrets)` (engine.ts,
+  exported) returns one sentence for a remote `http:` base URL — `requests to <host>
+  are sent unencrypted (http:, not https:)`, or `the token is sent unencrypted to
+  <host> (…)` / `the login is …` when credentials go along — and `undefined` for
+  `https:`, an unparsable URL and loopback hosts. `action()` (shared.ts) prints it
+  as `warning: <sentence>` once per run, after the options and credentials are
+  checked and before the first request; help, `--version` and usage errors never
+  warn. `hello` sends no credentials, so its warning names none.
 
 ## Testing
 
@@ -360,6 +368,12 @@ for every transport (P5):
 GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
 credential injection + token precedence (`client.test.ts`), the credential guard
 / exit codes / env seeding (`cli.test.ts`).
+
+Conformance tests (`test/conformance-p*.test.ts`, shared across the `*-cli` repos;
+only their adapter block differs): P1 CLI redaction, P2 library redaction, P4/P19
+configuration validation, P5 transport contract, P6 retry policy, P7 pipes and exit
+codes, P8/P9/P13 responses and errors, P18 GENESIS access check, P20 the
+plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userinfo).
 
 ## Verified against a live account (2026-07-03)
 

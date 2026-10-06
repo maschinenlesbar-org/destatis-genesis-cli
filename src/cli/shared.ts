@@ -5,7 +5,7 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
-import type { RawResponse } from "../client/engine.js";
+import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
 import {
@@ -393,6 +393,20 @@ function warnArgvCredentials(deps: CliDeps, command: Command): void {
 }
 
 /**
+ * Warn (once per run, on stderr) when the requests go to a remote host over plain
+ * `http:` (P20): the library's `cleartextProblem` for the effective base URL
+ * (`--base-url`, else the default), naming what travels with them — "the token" or
+ * "the login" (username and password) when the command sends credentials. Called
+ * after the options and credentials are checked, right before the command's first
+ * request, so help, `--version` and usage errors never warn. Never prints a value.
+ */
+function warnCleartext(deps: CliDeps, global: GlobalOptions, creds: ResolvedCredentials): void {
+  const secrets = creds.token !== undefined ? ["the token"] : creds.present ? ["the login"] : [];
+  const problem = cleartextProblem(global.baseUrl ?? DEFAULT_BASE_URL, secrets);
+  if (problem !== undefined) deps.io.err(`warning: ${problem}`);
+}
+
+/**
  * Run a command body, rewording the library's "this endpoint needs an account"
  * error with the flags and env vars that supply credentials, and the signup URL.
  */
@@ -436,6 +450,7 @@ export function action(
     if (options.credentials === false) {
       const client = deps.createClient(toClientOptions(global, { present: false }));
       warnArgvCredentials(deps, command);
+      warnCleartext(deps, global, { present: false });
       await fn({ client, global, opts: command.opts() }, positionals);
       return;
     }
@@ -454,6 +469,7 @@ export function action(
     // A half username/password pair gets the library's pair error, reworded.
     const client = createClient(deps, toClientOptions(global, creds));
     if (creds.present) warnArgvCredentials(deps, command);
+    warnCleartext(deps, global, creds);
     await withCredentialsHint(() => fn({ client, global, opts: command.opts() }, positionals));
   };
 }
