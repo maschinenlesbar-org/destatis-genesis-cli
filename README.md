@@ -32,9 +32,10 @@ credential is bundled with this tool.
 | Token (recommended) | `--token <t>` | `DESTATIS_API_TOKEN` |
 | Username + password | `--username <u>` / `--password <p>` | `DESTATIS_USERNAME` / `DESTATIS_PASSWORD` |
 
-Precedence per field is **flag > env var > unset**, so `--username` combines with
-`DESTATIS_PASSWORD`. Use **one** login: a token together with a username or password —
-from flags, variables or a mix, e.g. `DESTATIS_API_TOKEN` set while you pass
+Precedence per field is **flag > env var**, so `--username` combines with
+`DESTATIS_PASSWORD`; a stored login (`destatis config`, below) comes after both. Use
+**one** login: a token together with a username or password — from flags, variables
+or a mix, e.g. `DESTATIS_API_TOKEN` set while you pass
 `--username`/`--password` — is refused (exit 2, naming where each came from, never the
 values) instead of one silently winning. Unset the other one. The library refuses the
 same combination (`DestatisValidationError`).
@@ -50,19 +51,49 @@ header cannot carry), is refused with exit 2; a blank env var counts as unset. A
 malformed variable fails only a command that uses it: `--help`, `--version` and
 `destatis hello` always work, and a flag overrides the variable.
 No message repeats a credential: the CLI prints `***` in place of the token,
-username and password (from flags or env vars) and of any `user:pass@` in a URL,
-wherever they would appear — a usage error, an unknown command, the server's echo.
+username and password (from flags, env vars or the credentials file) and of any
+`user:pass@` in a URL, wherever they would appear — a usage error, an unknown command, the server's echo.
 
 > **Prefer the environment variables.** A credential passed as a `--token` /
 > `--username` / `--password` **flag** is visible in the process table (`ps`,
 > `/proc`) to other local users and is persisted in your shell history — the
 > account *password* is especially sensitive. The CLI prints a one-line stderr
-> warning when it detects a flag-supplied credential. Set the env var instead; it
-> takes effect whenever the corresponding flag is absent.
+> warning when it detects a flag-supplied credential. Set the env var instead (it
+> takes effect whenever the corresponding flag is absent), or store the login once
+> with `destatis config set` (below).
 
 ```bash
 export DESTATIS_API_TOKEN="your-32-char-token"
 ```
+
+**Or store it once**, in a credentials file of its own (the same mechanism as
+[openka-cli](https://github.com/maschinenlesbar-org/openka-cli)'s `ka config`):
+
+```bash
+destatis config set token                          # typed at a prompt, without echo
+destatis config set username                       # or a login: username …
+destatis config set password                       # … and password
+pass show genesis | destatis config set password   # or piped in
+destatis config get token                          # masked: 0123…cdef (--reveal prints it whole)
+destatis config list                               # what is stored, and where
+destatis config unset token
+```
+
+The value is never taken from the command line, so it reaches neither shell history
+nor `ps`. The file is `$XDG_CONFIG_HOME/destatis-genesis/credentials` (else
+`~/.config/destatis-genesis/credentials`): mode 0600 in a directory of mode 0700,
+replaced atomically, and not read at all while anyone else could read it. A value is
+stored exactly as given — spaces inside a password are fine; a blank value, a line
+break or leading/trailing whitespace is refused (exit 2). The file is consulted only
+when no flag and no `DESTATIS_*` variable gives **any** credential, and then as a
+whole: one login is never pieced together from the file and a flag or variable, so a
+stored password does not complete a `DESTATIS_USERNAME`. The file's own login follows
+the same rules — a stored token next to a stored username or password, or half a
+pair, exits 2. `--guest` and `destatis hello` don't read it; a stored value read is
+redacted from everything printed, like a flag's.
+
+Precedence is **flags > `DESTATIS_*` variables** (per field) **> the credentials file >
+none**.
 
 **Base URL.** `--base-url` (default `https://genesis.destatis.de`) points the CLI
 at another GENESIS host. A plain `http:` base URL on a remote host gets one

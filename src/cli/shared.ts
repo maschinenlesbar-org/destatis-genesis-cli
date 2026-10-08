@@ -206,20 +206,64 @@ export function checkEnvCredentials(creds: ResolvedCredentials, sources: Record<
   }
 }
 
+/** How to store the login once, as the messages that ask for credentials name it. */
+export const STORE_CREDENTIALS_HINT = "store them once with `destatis config set token` (or `username` and `password`)";
+
 /** The usage error for a run with neither credentials nor `--guest` (no silent guest access). */
 export const NO_CREDENTIALS_MESSAGE =
   "No credentials. Set --token (env DESTATIS_API_TOKEN) or --username/--password " +
-  "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), or pass --guest to run without an account " +
+  `(env DESTATIS_USERNAME / DESTATIS_PASSWORD), ${STORE_CREDENTIALS_HINT}, or pass --guest to run without an account ` +
   "(guest access covers `find` only). A free account is available at https://www-genesis.destatis.de.";
 
-/** Where each set credential came from, as the user would name it: `--token` or `DESTATIS_API_TOKEN`. */
+/** The value source `action()` gives a credential read from the credentials file. */
+const FILE_SOURCE = "file";
+
+/**
+ * Where each set credential came from, as the user would name it: `--token`,
+ * `DESTATIS_API_TOKEN`, or `the stored token` (the credentials file).
+ */
 function credentialSourceNames(
   creds: ResolvedCredentials,
   sources: Partial<Record<keyof typeof CREDENTIAL_ENV_VARS, string | undefined>>,
 ): string[] {
   return (["token", "username", "password"] as const)
     .filter((key) => creds[key] !== undefined)
-    .map((key) => (sources[key] === "env" ? CREDENTIAL_ENV_VARS[key] : `--${key}`));
+    .map((key) =>
+      sources[key] === "env" ? CREDENTIAL_ENV_VARS[key] : sources[key] === FILE_SOURCE ? `the stored ${key}` : `--${key}`,
+    );
+}
+
+/**
+ * The login from the credentials file (`destatis config`), for a run whose flags and
+ * `DESTATIS_*` variables give no credential at all: `undefined` when `deps` has no
+ * store (tests that don't ask for one) or the file holds none of the three. Read here
+ * and only here, so a problem with the file (a link, mode 644, broken JSON — a
+ * `DestatisError`, exit 1) never stands in the way of a login given another way.
+ * What it holds is passed on as it is, like flags and variables: a token next to a
+ * username or password, or half a pair, is the library's error, reworded by
+ * `createClient`. A stored value the library would refuse (hand-edited into the file)
+ * is an error naming the credential and the fix, never its value. Every value read
+ * is added to the run's redaction (`deps.redact`): the server may echo it back.
+ */
+function storedCredentials(deps: CliDeps): ResolvedCredentials | undefined {
+  if (deps.credentials === undefined) return undefined;
+  const store = deps.credentials();
+  const all = store.all();
+  const picked: GlobalOptions = {};
+  for (const key of ["token", "username", "password"] as const) {
+    const value = nonBlank(all[key]);
+    if (value === undefined) continue;
+    const reason = credentialProblem(value);
+    if (reason !== undefined) {
+      throw new DestatisError(
+        `The ${key} stored in ${store.path} cannot be sent: ${reason} Replace it: destatis config set ${key}`,
+      );
+    }
+    deps.redact?.(value);
+    picked[key] = value;
+  }
+  if (picked.token === undefined && picked.username === undefined && picked.password === undefined) return undefined;
+  return resolveCredentials(picked);
 }
 
 /**
@@ -231,6 +275,7 @@ function createClient(
   deps: CliDeps,
   options: DestatisClientOptions,
   setBy: readonly string[] = [],
+  fromFile = false,
 ): ReturnType<CliDeps["createClient"]> {
   try {
     return deps.createClient(options);
@@ -239,14 +284,19 @@ function createClient(
       throw new DestatisUsageError(
         `A token cannot be combined with a username/password (set: ${setBy.join(", ")}). ` +
           "Pass either --token (env DESTATIS_API_TOKEN) or --username/--password " +
-          "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), not both.",
+          "(env DESTATIS_USERNAME / DESTATIS_PASSWORD), not both." +
+          (fromFile ? " Remove the stored one you don't use: `destatis config unset token` (or `username` and `password`)." : ""),
         { cause: err },
       );
     }
     if (err instanceof DestatisValidationError && err.message.endsWith(CREDENTIAL_PAIR_PROBLEM)) {
       throw new DestatisUsageError(
         "Provide BOTH --username and --password (or use --token). " +
-          "Env: DESTATIS_USERNAME + DESTATIS_PASSWORD, or DESTATIS_API_TOKEN.",
+          "Env: DESTATIS_USERNAME + DESTATIS_PASSWORD, or DESTATIS_API_TOKEN." +
+          (fromFile
+            ? ` The credentials file holds no ${options.username === undefined ? "username" : "password"}: ` +
+              `\`destatis config set ${options.username === undefined ? "username" : "password"}\` stores it.`
+            : ""),
         { cause: err },
       );
     }
@@ -424,7 +474,8 @@ function warnArgvCredentials(deps: CliDeps, command: Command): void {
   if (flagged.length > 0) {
     deps.io.err(
       `Warning: credential(s) passed on the command line are visible in the process ` +
-        `list and shell history. Prefer the environment variable(s): ${flagged.join(", ")}.`,
+        `list and shell history. Prefer the environment variable(s): ${flagged.join(", ")}, ` +
+        "or store them once with `destatis config set`.",
     );
   }
 }
@@ -454,7 +505,7 @@ async function withCredentialsHint(body: () => Promise<void>): Promise<void> {
     if (err instanceof DestatisValidationError && err.message.endsWith(CREDENTIALS_REQUIRED_PROBLEM)) {
       throw new DestatisUsageError(
         "This command needs credentials. Set --token (env DESTATIS_API_TOKEN) " +
-          "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
+          `or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD), or ${STORE_CREDENTIALS_HINT}. ` +
           "A free account is available at https://www-genesis.destatis.de.",
         { cause: err },
       );
@@ -529,20 +580,35 @@ export function action(
     if (global.guest === true && options.guest !== true) {
       throw new DestatisUsageError(
         `\`${commandPath(command)}\` needs an account; --guest covers \`find\` only. ` +
-          "Set --token (env DESTATIS_API_TOKEN) or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD).",
+          "Set --token (env DESTATIS_API_TOKEN) or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD), " +
+          `or ${STORE_CREDENTIALS_HINT}.`,
       );
     }
-    const sources = {
+    let sources: Record<keyof typeof CREDENTIAL_ENV_VARS, string | undefined> = {
       token: root.getOptionValueSource("token"),
       username: root.getOptionValueSource("username"),
       password: root.getOptionValueSource("password"),
     };
-    const creds: ResolvedCredentials = global.guest === true ? { present: false } : resolveCredentials(global);
+    let creds: ResolvedCredentials = global.guest === true ? { present: false } : resolveCredentials(global);
     checkEnvCredentials(creds, sources);
+    // flags > DESTATIS_* variables (per field) > the credentials file > none. The file
+    // is a source of its own, not a fallback per field: it is read only when the flags
+    // and variables give no credential at all, so one login is never pieced together
+    // from two places — and a problem with the file never stops a run that has one.
+    // `--guest` doesn't read it either.
+    let fromFile = false;
+    if (global.guest !== true && creds.token === undefined && creds.username === undefined && creds.password === undefined) {
+      const stored = storedCredentials(deps);
+      if (stored !== undefined) {
+        creds = stored;
+        sources = { token: FILE_SOURCE, username: FILE_SOURCE, password: FILE_SOURCE };
+        fromFile = true;
+      }
+    }
     // A token together with a username or password (from any source), no credentials
     // without --guest, or half a username/password pair: the library refuses, and the
     // error is reworded here (exit 2, before any request).
-    const client = createClient(deps, toClientOptions(global, creds), credentialSourceNames(creds, sources));
+    const client = createClient(deps, toClientOptions(global, creds), credentialSourceNames(creds, sources), fromFile);
     if (creds.present) warnArgvCredentials(deps, command);
     warnCleartext(deps, global, creds);
     await withCredentialsHint(() => fn({ client, global, opts: command.opts() }, positionals));

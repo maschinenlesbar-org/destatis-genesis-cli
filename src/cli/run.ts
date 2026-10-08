@@ -95,7 +95,9 @@ const SECRET_ENVS = ["DESTATIS_API_TOKEN", "DESTATIS_USERNAME", "DESTATIS_PASSWO
  *   JSON-escaped forms; values under 4 characters are skipped (`redactSecrets`).
  *
  * A pattern alone can't delimit a password with spaces, quotes, `#`, `?` or `/`; the
- * exact strings can. Without secrets the output passes through unchanged.
+ * exact strings can. Without secrets the output passes through unchanged. The
+ * returned deps' `redact` adds a secret later, for a credential that only `action()`
+ * learns — one read from the credentials file (`destatis config`).
  */
 export function withRedactedOutput(deps: CliDeps, argv: readonly string[]): CliDeps {
   const env = deps.env ?? process.env;
@@ -125,12 +127,11 @@ export function withRedactedOutput(deps: CliDeps, argv: readonly string[]): CliD
     if (eq > 0 && SECRET_FLAGS.includes(token.slice(0, eq))) addSecret(token.slice(eq + 1));
   });
   for (const value of values) if (looksLikeToken(value)) addSecret(value);
-  if (userinfo.size === 0 && [...secrets].every((s) => s.trim().length < 4)) return deps;
   const urlList = [...userinfo];
-  const secretList = [...secrets];
-  const redact = (text: string): string => redactSecrets(redactCredentials(text, urlList), secretList);
+  const redact = (text: string): string => redactSecrets(redactCredentials(text, urlList), [...secrets]);
   return {
     ...deps,
+    redact: addSecret,
     io: { ...deps.io, out: (text) => deps.io.out(redact(text)), err: (text) => deps.io.err(redact(text)) },
   };
 }
@@ -171,11 +172,15 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       // takes no credentials (`hello` — a 401/403 there is a wrong --base-url or a
       // proxy, not a login problem).
       if (err.isAuthError && err.credentialsSent === true) {
-        deps.io.err("Hint: check your credentials (--token or --username/--password).");
+        deps.io.err(
+          "Hint: check your credentials (--token or --username/--password, their DESTATIS_* variables, " +
+            "or the stored ones: `destatis config list`; `destatis config set token` replaces one).",
+        );
       } else if (err.isAuthError && err.credentialsSent === false) {
         deps.io.err(
           "Hint: GENESIS refused the request without credentials. Set --token (env DESTATIS_API_TOKEN) " +
-            "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD).",
+            "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD), or store them once " +
+            "with `destatis config set token` (or `username` and `password`).",
         );
       }
       // Map "object not found" (logical 90 / a bare HTTP 404) to a distinct exit

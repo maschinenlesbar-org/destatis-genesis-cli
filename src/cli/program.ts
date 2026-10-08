@@ -25,6 +25,8 @@ import { registerFindCommand } from "./commands/find.js";
 import { registerCatalogueCommands } from "./commands/catalogue.js";
 import { registerMetadataCommands } from "./commands/metadata.js";
 import { registerDataCommands } from "./commands/data.js";
+import { registerConfigCommands } from "./commands/config.js";
+import { CredentialStore } from "./credentials.js";
 
 /**
  * Single source of truth for the version: read from package.json at runtime
@@ -44,11 +46,16 @@ function readVersion(): string {
 
 export const VERSION = readVersion();
 
-/** Default dependencies: real client + real stdout/stderr/filesystem + real env. */
+/**
+ * Default dependencies: real client + real stdout/stderr/filesystem + real env, and
+ * the user's credentials file (`destatis config`). Only these set `credentials`: deps
+ * built elsewhere — every test that does not ask for it — never read one.
+ */
 export const defaultDeps: CliDeps = {
   io: defaultIO,
   createClient: (options) => new DestatisClient(options),
   env: process.env,
+  credentials: () => CredentialStore.fromEnv(process.env),
 };
 
 /**
@@ -76,7 +83,8 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
       "CLI for the DESTATIS GENESIS-Online REST API " +
         "(https://genesis.destatis.de) — Germany's official-statistics database. " +
         "Needs a free account: pass --token (env DESTATIS_API_TOKEN) or " +
-        "--username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD). " +
+        "--username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD), or store them once " +
+        "with `destatis config set token` (or `username` and `password`). " +
         "Register at https://www-genesis.destatis.de. Without an account, pass --guest " +
         "explicitly: `destatis --guest find …` searches as the GENESIS guest user; " +
         "`destatis hello` needs neither.",
@@ -124,7 +132,8 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
   // Seed each credential flag from its env var (blank treated as unset), with the
   // value source "env". commander treats these as the option's value, which an
   // explicit flag on the command line overrides during parse (source "cli"):
-  // flag > env var > unset, per field.
+  // flag > env var > unset, per field. The credentials file (`destatis config`) comes
+  // after both, as a whole: `action()` reads it only when they give no credential.
   const env = deps.env ?? process.env;
   for (const [key, name] of Object.entries(CREDENTIAL_ENV_VARS)) {
     const value = readEnv(env, name);
@@ -136,6 +145,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
   registerCatalogueCommands(program, deps);
   registerMetadataCommands(program, deps);
   registerDataCommands(program, deps);
+  registerConfigCommands(program, deps);
 
   return program;
 }

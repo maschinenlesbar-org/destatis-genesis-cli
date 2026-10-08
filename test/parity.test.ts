@@ -597,7 +597,7 @@ test("parity #3 control: a username/password pair sends the identical request", 
 // ---- Finding 6 (PAT-7): account-only endpoints need credentials ------------------------
 
 const NO_CREDS_CLI =
-  /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), or pass --guest to run without an account \(guest access covers `find` only\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
+  /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest to run without an account \(guest access covers `find` only\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
 const NO_CREDS_LIB =
   /^Invalid credentials: No credentials: pass a token, a username and password, or guest: true for guest access \(whoami and find only\)\.$/;
 const NEEDS_CLI = /^Error: `[a-z ]+` needs an account; --guest covers `find` only\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password/m;

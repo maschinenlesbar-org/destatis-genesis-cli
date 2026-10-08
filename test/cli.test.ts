@@ -49,7 +49,7 @@ test("a command without credentials and without --guest exits 2, naming both way
       assert.equal(cli.mt.calls.length, 0);
       assert.match(
         cli.err.join("\n"),
-        /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), or pass --guest/,
+        /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest/,
       );
     }
   }

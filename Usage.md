@@ -16,7 +16,22 @@ an unknown command or surplus argument, and in a server answer that echoes them.
 
 ```bash
 export DESTATIS_API_TOKEN="…"          # or DESTATIS_USERNAME + DESTATIS_PASSWORD
+
+# Or stored once in a credentials file (typed without echo, or piped in)
+destatis config set token              # or: config set username, config set password
 ```
+
+Precedence is flags > `DESTATIS_*` variables (per field) > the credentials file >
+none. `destatis config` keeps the login in `$XDG_CONFIG_HOME/destatis-genesis/credentials`
+(else `~/.config/destatis-genesis/credentials`), mode 0600, written atomically;
+`config set token|username|password` reads the value from a prompt without echo or
+from stdin, never from the command line; `config get <name>` shows it masked
+(`--reveal` prints it whole); `config list` and `config unset <name>` do what they
+say. The file is read only when no flag and no variable gives any credential, and
+then as a whole (never combined with a flag or variable); its login follows the same
+rules (a token with a username or password, or half a pair, exits 2). A file that
+others can read is refused (exit 1, naming `chmod 600`), and only when it is needed;
+`--guest` and `hello` never read it.
 
 Global options (valid on any command). Each option takes one value: giving one
 twice (`--start-year 2020 --start-year 2021`, `--token a --token b`) is a usage

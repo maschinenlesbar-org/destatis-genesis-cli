@@ -20,9 +20,10 @@ src/
     client.ts    # DestatisClient — helloworld/find + catalogue/metadata/data groups
     index.ts
   cli/
-    io.ts        # injectable I/O + env seam (CliDeps / CliIO)
+    io.ts        # injectable I/O + env seam (CliDeps / CliIO), readSecretFrom
+    credentials.ts # CredentialStore — the credentials file behind `destatis config`
     shared.ts    # option parsers, credential resolution, option->client mapping, render
-    commands/    # hello, find, catalogue, metadata, data
+    commands/    # hello, find, catalogue, metadata, data, config
     program.ts   # assembles the commander program; seeds credential flags from env (unchecked)
     run.ts       # argv -> exit code (no process.exit; testable)
     index.ts     # #! bin shim
@@ -230,6 +231,25 @@ refuses it (`tokenOrLoginProblem`, see above) and the CLI rewords that as a usag
 error naming the sources (exit 2, no request). Supplying only one of
 username/password is rejected by the library (see below) and reworded by the CLI
 with the flags (exit 2).
+
+The **credentials file** is the CLI's, not the library's: `src/cli/credentials.ts`
+(`CredentialStore`, the same mechanism as openka-cli's `ka config`) and `destatis
+config` (`src/cli/commands/config.ts`; names `token`, `username`, `password`). It
+reaches the CLI through `CliDeps.credentials`, which only `defaultDeps` sets, so a test
+that does not ask for one never reads the user's file. `action()` (`shared.ts`,
+`storedCredentials`) reads it only when the flags and variables give no credential at
+all (and not with `--guest`, nor for `hello`), and then takes the whole login from it:
+the file is a third tier, not a per-field fallback, so a login is never pieced
+together from two places. Its values go through the same library checks (token with a
+login, half a pair; reworded naming `the stored token` etc.), a stored value the
+library would refuse is a `DestatisError` (exit 1) naming the credential, and every
+value read is handed to `CliDeps.redact` (set by `run()`'s `withRedactedOutput`) so a
+server echo of it prints `***`. `config set` reads through `CliIO.readSecret`
+(`readSecretFrom`: raw mode without echo on a terminal, the whole input from a pipe),
+never from argv; it drops trailing line breaks only and applies the store's rule
+(`credentialValueProblem`: not blank, no line break or other control character —
+spaces and tabs inside are allowed, since a password may hold them) plus the library's
+`credentialProblem`.
 
 Two things the transport MUST get right (both found by live testing):
 
