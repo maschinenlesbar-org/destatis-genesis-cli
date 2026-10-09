@@ -97,7 +97,7 @@ none**.
 
 **Base URL.** `--base-url` (default `https://genesis.destatis.de`) points the CLI
 at another GENESIS host. A plain `http:` base URL on a remote host gets one
-`warning:` line on stderr per run, naming the host and what travels unencrypted
+`WARN` record of `destatis.http` on stderr per run, naming the host and what travels unencrypted
 with the requests (`the token`, `the login`), never its value; loopback hosts
 (`localhost`, `127.0.0.0/8`, `::1`) don't warn. stdout and the exit code are
 unchanged. The library exports the same check as `cleartextProblem(baseUrl, secrets)`.
@@ -119,6 +119,23 @@ Every command prints the API's JSON envelope (including the `Copyright`
 attribution and a `Status` object). See **[Usage.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/Usage.md)** for the full
 command reference and **[GLOSSARY.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/GLOSSARY.md)** for GENESIS concepts (EVAS
 codes, cubes, `selection` wildcards, `Status.Code` values).
+
+Errors and diagnostics go to stderr, so piping stdout into `jq` stays clean. Each line
+on stderr is a **log record**: a timestamp (UTC), a level (`ERROR`, `WARN`, `INFO`) and a
+topic, the program and the area it comes from (`destatis.cli` for usage errors and the
+credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers and the
+credentials hint, `destatis.http` for the connection, `destatis.config`,
+`destatis.output`). By default it is written log4j style; `--log-format jsonl` writes one
+JSON object per line instead:
+
+```text
+2026-10-09T14:03:12.481Z ERROR [destatis.api] GENESIS status 2 (ERROR) / HTTP 404 for POST https://genesis.destatis.de/genesisWS/rest/2020/metadata/table: Ein Fehler ist aufgetreten. (…)
+2026-10-09T14:03:12.483Z INFO  [destatis.api] check your credentials (--token or --username/--password, …)
+```
+
+```bash
+destatis --log-format jsonl logincheck 2>log.jsonl   # {"ts":"…","level":"ERROR","topic":"destatis.api","msg":"GENESIS …"}
+```
 
 ## Library use
 

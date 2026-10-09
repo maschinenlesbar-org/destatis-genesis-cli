@@ -35,7 +35,7 @@ const clientFor = (mode: "token" | "pair", transport: Transport): Client =>
 const libLogincheck = (client: Client): Promise<unknown> => client.logincheck();
 const LOGINCHECK_ARGV = ["logincheck"];
 /** The line the CLI adds to an auth error. */
-const CREDENTIALS_HINT = /^Hint: check your credentials/m;
+const CREDENTIALS_HINT = /^\S+ INFO  \[destatis\.api\] check your credentials/m;
 /** The members this repo's CliIO has besides out/err. */
 const IO_EXTRAS = { writeFile: () => {}, fileExists: () => false, outBinary: () => {} };
 /** The server's texts (live, genesis.destatis.de 2026-10-05). */

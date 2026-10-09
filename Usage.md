@@ -42,12 +42,13 @@ error (exit 2), not "the last one wins".
 | `--token <t>` | API token (env `DESTATIS_API_TOKEN`) |
 | `--guest` | run without an account, as the GENESIS guest user — `find` and `hello` only. Required when no credentials are set (no silent guest access); refused together with any credential, flag or `DESTATIS_*` variable (exit 2) |
 | `--username <u>` · `--password <p>` | account login (env `DESTATIS_USERNAME` / `DESTATIS_PASSWORD`; a flag beats its variable per field, so `--username` combines with `DESTATIS_PASSWORD`). Not together with a token from `--token` or `DESTATIS_API_TOKEN` (usage error, exit 2, naming the sources) |
-| `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo, whitespace or control characters. A remote `http:` URL prints `warning: … sent unencrypted to <host> (http:, not https:)` on stderr once per run, naming `the token` or `the login` when one is sent (never its value); loopback hosts don't warn |
+| `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo, whitespace or control characters. A remote `http:` URL logs `… WARN  [destatis.http] … sent unencrypted to <host> (http:, not https:)` on stderr once per run, naming `the token` or `the login` when one is sent (never its value); loopback hosts don't warn |
 | `--language <de\|en>` | response language (not sent unless given; the server default is `de`; English data labels are partial) |
 | `--pagelength <n>` | max list results, `1..25000` (server default 100) |
 | `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`) |
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
+| `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [destatis.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
 | `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout; `-o -` means stdout |
 | `--force` | overwrite the `--output` file if it already exists (otherwise the write is refused — also when a symlink, even a dangling one, sits at that path) |
 
@@ -191,8 +192,9 @@ A reader that stops early (`destatis find … | head`) ends the run quietly with
 > **Wrong credentials exit 1.** GENESIS answers a wrong username/password or token
 > with HTTP 404 and a flat `{"Code":2,"Content":"…Nutzernamen oder Ihren Token bzw.
 > das Passwort…","Type":"ERROR"}` body. The CLI reads that body, so the error is
-> `GENESIS status 2 (ERROR) / HTTP 404 for POST …: …Nutzernamen…`, followed by a
-> credentials hint, and exits **1**. Only a 404 without a GENESIS code exits 4.
+> `GENESIS status 2 (ERROR) / HTTP 404 for POST …: …Nutzernamen…` (an `ERROR` record of
+> `destatis.api`), followed by a credentials hint (an `INFO` record of `destatis.api`),
+> and exits **1**. Only a 404 without a GENESIS code exits 4.
 > `logincheck` gets the same text on an HTTP 200 instead; it exits **1** with the
 > hint too (`GENESIS login rejected (HTTP 200) …`). Should another endpoint send the
 > flat Code 2 body on an HTTP 200, it is the same auth error:

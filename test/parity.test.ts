@@ -520,7 +520,7 @@ test("parity #5 control: a base URL with a path prefix sends the identical reque
 
 // ---- Finding 3 (PAT-7): username and password come as a pair --------------------------
 
-const PAIR_CLI = /^Error: Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m;
+const PAIR_CLI = /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m;
 const PAIR_LIB = /^Invalid credentials: Provide both username and password \(or a token\)\.$/;
 
 const pairCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [
@@ -580,7 +580,7 @@ test("parity #3: a username or password next to a token is rejected by both, wit
       responder: () => jsonResponse(fx.findResult),
     });
     assertBothReject(p, /^Invalid credentials: Pass either a token or a username and password, not both\.$/);
-    assert.match(p.cli.err, /^Error: A token cannot be combined with a username\/password \(set: /m);
+    assert.match(p.cli.err, /^ERROR \[destatis\.cli\] A token cannot be combined with a username\/password \(set: /m);
   }
 });
 
@@ -597,10 +597,10 @@ test("parity #3 control: a username/password pair sends the identical request", 
 // ---- Finding 6 (PAT-7): account-only endpoints need credentials ------------------------
 
 const NO_CREDS_CLI =
-  /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest to run without an account \(guest access covers `find` only\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
+  /^ERROR \[destatis\.cli\] No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest to run without an account \(guest access covers `find` only\)\. A free account is available at https:\/\/www-genesis\.destatis\.de\.$/m;
 const NO_CREDS_LIB =
   /^Invalid credentials: No credentials: pass a token, a username and password, or guest: true for guest access \(whoami and find only\)\.$/;
-const NEEDS_CLI = /^Error: `[a-z ]+` needs an account; --guest covers `find` only\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password/m;
+const NEEDS_CLI = /^ERROR \[destatis\.cli\] `[a-z ]+` needs an account; --guest covers `find` only\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password/m;
 const NEEDS_LIB = /^Invalid credentials: This endpoint needs an account \(a token, or a username and password\)\.$/;
 
 const needsCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [
@@ -676,7 +676,7 @@ test("parity #6: --guest with a credential is rejected by both, with no request"
       lib: (t) => new DestatisClient({ ...lib, guest: true, transport: t }).find({ term: "Bev" }),
     });
     assertBothReject(p, /^Invalid credentials: guest: true cannot be combined with a token, username or password\.$/);
-    assert.match(p.cli.err, /^Error: --guest cannot be combined with credentials \((--token|--username|DESTATIS_API_TOKEN|DESTATIS_USERNAME, DESTATIS_PASSWORD) set\)/m);
+    assert.match(p.cli.err, /^ERROR \[destatis\.cli\] --guest cannot be combined with credentials \((--token|--username|DESTATIS_API_TOKEN|DESTATIS_USERNAME, DESTATIS_PASSWORD) set\)/m);
     assert.doesNotMatch(p.cli.err, /0123456789abcdef|pass\b/);
   }
 });

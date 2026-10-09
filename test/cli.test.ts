@@ -4,7 +4,7 @@ import { run } from "../src/cli/run.js";
 import { DestatisClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
+import { makeMockTransport, jsonResponse, rawResponse, bodyOf, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 function makeCli(
@@ -48,8 +48,8 @@ test("a command without credentials and without --guest exits 2, naming both way
       assert.equal(code, 2, argv.join(" "));
       assert.equal(cli.mt.calls.length, 0);
       assert.match(
-        cli.err.join("\n"),
-        /^Error: No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest/,
+        untimed(cli.err.join("\n")),
+        /^ERROR \[destatis\.cli\] No credentials\. Set --token \(env DESTATIS_API_TOKEN\) or --username\/--password \(env DESTATIS_USERNAME \/ DESTATIS_PASSWORD\), store them once with `destatis config set token` \(or `username` and `password`\), or pass --guest/,
       );
     }
   }
@@ -61,9 +61,9 @@ test("--guest on an account-only command exits 2 before any request", async () =
     const code = await run(["--base-url", "http://mirror.example", "--guest", ...argv], cli.deps);
     assert.equal(code, 2, argv.join(" "));
     assert.equal(cli.mt.calls.length, 0);
-    assert.match(cli.err.join("\n"), new RegExp(`^Error: \`${argv.slice(0, 2).join(" ").replace(/ 124$| 12411-0001$/, "")}\` needs an account; --guest covers \`find\` only`, "m"));
+    assert.match(untimed(cli.err.join("\n")), new RegExp(`^ERROR \\[destatis\\.cli\\] \`${argv.slice(0, 2).join(" ").replace(/ 124$| 12411-0001$/, "")}\` needs an account; --guest covers \`find\` only`, "m"));
     // A usage error: no http warning either.
-    assert.doesNotMatch(cli.err.join("\n"), /^warning: /m);
+    assert.doesNotMatch(untimed(cli.err.join("\n")), /^WARN /m);
   }
 });
 
@@ -130,7 +130,7 @@ test("a credential passed via --token warns to stderr, recommending the env var 
   const code = await run([...TOKEN, "catalogue", "tables", "124*"], cli.deps);
   assert.equal(code, 0);
   const errText = cli.err.join("\n");
-  assert.match(errText, /command line are visible in the process list/);
+  assert.match(untimed(errText), /^WARN  \[destatis\.cli\] credential\(s\) passed on the command line are visible in the process list/m);
   assert.match(errText, /DESTATIS_API_TOKEN/);
   // The credential value itself is never printed.
   assert.doesNotMatch(errText, /0123456789abcdef/);
@@ -181,8 +181,8 @@ test("a token together with a username or password, from any source, is a usage 
     const label = `${argv.join(" ")} ${JSON.stringify(env)}`;
     assert.equal(code, 2, label);
     assert.equal(cli.mt.calls.length, 0, label);
-    const err = cli.err.join("\n");
-    assert.ok(err.includes(`Error: A token cannot be combined with a username/password (set: ${named}).`), `${label}\n${err}`);
+    const err = untimed(cli.err.join("\n"));
+    assert.ok(err.includes(`ERROR [destatis.cli] A token cannot be combined with a username/password (set: ${named}).`), `${label}\n${err}`);
     assert.doesNotMatch(err, /flagpass|envpass1|0123456789abcdef/);
   }
 });
@@ -353,7 +353,7 @@ test("the live 401 + flat Code 15 reply exits 1 with the GENESIS text and a cred
   const errText = cli.err.join("\n");
   assert.match(errText, /GENESIS status 15/);
   assert.match(errText, /nicht berechtigt/);
-  assert.match(errText, /Hint: check your credentials/);
+  assert.match(untimed(errText), /^INFO  \[destatis\.api\] check your credentials/m);
 });
 
 test("the live 404 + flat Code 2 reply (wrong credentials) exits 1, not 4, with text and hint", async () => {
@@ -363,7 +363,7 @@ test("the live 404 + flat Code 2 reply (wrong credentials) exits 1, not 4, with 
   const errText = cli.err.join("\n");
   assert.match(errText, /GENESIS status 2 \(ERROR\) \/ HTTP 404/);
   assert.match(errText, /Nutzernamen/);
-  assert.match(errText, /Hint: check your credentials/);
+  assert.match(untimed(errText), /^INFO  \[destatis\.api\] check your credentials/m);
 });
 
 test("hello (no credentials sent) gets no credentials hint on a 401/403", async () => {
@@ -381,7 +381,7 @@ test("a guest find refused with 401 + Code 15 hints that credentials are needed"
   const code = await run(["--guest", "find", "x"], cli.deps);
   assert.equal(code, 1);
   const errText = cli.err.join("\n");
-  assert.match(errText, /Hint: GENESIS refused the request without credentials\. Set --token/);
+  assert.match(untimed(errText), /^INFO  \[destatis\.api\] GENESIS refused the request without credentials\. Set --token/m);
   assert.doesNotMatch(errText, /check your credentials/);
 });
 
@@ -435,7 +435,7 @@ test("--output writes JSON to a file and keeps stdout clean", async () => {
   assert.equal(code, 0);
   assert.match(cli.files.get("/tmp/out.json")?.toString("utf8") ?? "", /12411-0001/);
   assert.equal(cli.out.length, 0);
-  assert.match(cli.err.join("\n"), /Wrote \d+ bytes to \/tmp\/out\.json/);
+  assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.output\] Wrote \d+ bytes to \/tmp\/out\.json/m);
 });
 
 test("--output refuses to overwrite an existing file without --force (GEN-04)", async () => {
@@ -521,14 +521,14 @@ test("a deeply nested response fails pretty-printing cleanly and still prints wi
   const pretty = makeCli(deep);
   assert.equal(await run(["--guest", "find", "x"], pretty.deps), 1);
   assert.deepEqual(pretty.out, []);
-  assert.equal(pretty.err.join("\n"), "Error: The response is nested too deeply to pretty-print; try --compact.");
+  assert.equal(untimed(pretty.err.join("\n")), "ERROR [destatis.cli] The response is nested too deeply to pretty-print; try --compact.");
 
   // Compact serialisation goes much deeper (it prints this one on current Node);
   // should a runtime's stack still be too small, it must fail just as cleanly.
   const compact = makeCli(deep);
   const code = await run(["--guest", "--compact", "find", "x"], compact.deps);
   if (code === 0) assert.equal(compact.out.join("").length, text.length);
-  else assert.equal(compact.err.join("\n"), "Error: The response is nested too deeply to print.");
+  else assert.equal(untimed(compact.err.join("\n")), "ERROR [destatis.cli] The response is nested too deeply to print.");
 });
 
 test("an empty 200 reply exits 1 instead of printing null", async () => {
@@ -673,7 +673,7 @@ test("-o - writes to stdout and creates no file named '-' (P12)", async () => {
   const raw = makeCli(() => rawResponse(zip, "application/zip"), { DESTATIS_API_TOKEN: "TOK" });
   assert.equal(await run(["data", "tablefile", "12411-0001", "-o", "-"], raw.deps), 0, raw.err.join("\n"));
   assert.equal(raw.files.size, 0);
-  assert.match(raw.err.join("\n"), /Wrote 6 bytes to stdout/);
+  assert.match(untimed(raw.err.join("\n")), /^INFO  \[destatis\.output\] Wrote 6 bytes to stdout/m);
 });
 
 test("P20: a remote http base URL warns once, naming what travels: nothing, the token or the login", async () => {
@@ -681,20 +681,20 @@ test("P20: a remote http base URL warns once, naming what travels: nothing, the 
     const cli = makeCli((req) => jsonResponse(req.url.endsWith("/whoami") ? fx.whoami : fx.findResult), env);
     const code = await run(["--base-url", "http://mirror.example:8080", ...argv], cli.deps);
     assert.equal(code, 0, cli.err.join("\n"));
-    return cli.err.filter((l) => l.startsWith("warning: "));
+    return cli.err.map(untimed).filter((l) => l.startsWith("WARN "));
   };
   assert.deepEqual(await warningsOf(["--guest", "find", "x"]), [
-    "warning: requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
+    "WARN  [destatis.http] requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
   ]);
   assert.deepEqual(await warningsOf(["find", "x"], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }), [
-    "warning: the token is sent unencrypted to mirror.example:8080 (http:, not https:)",
+    "WARN  [destatis.http] the token is sent unencrypted to mirror.example:8080 (http:, not https:)",
   ]);
   assert.deepEqual(await warningsOf(["find", "x"], { DESTATIS_USERNAME: "testuser01", DESTATIS_PASSWORD: "s3cret-Test-Pw" }), [
-    "warning: the login is sent unencrypted to mirror.example:8080 (http:, not https:)",
+    "WARN  [destatis.http] the login is sent unencrypted to mirror.example:8080 (http:, not https:)",
   ]);
   // hello never sends credentials, so its warning names none even when they are set.
   assert.deepEqual(await warningsOf(["hello"], { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" }), [
-    "warning: requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
+    "WARN  [destatis.http] requests to mirror.example:8080 are sent unencrypted (http:, not https:)",
   ]);
 });
 
@@ -702,7 +702,7 @@ test("P20: a usage error does not warn about http", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   const code = await run(["--base-url", "http://mirror.example", "catalogue", "tables", "--username", "USER123456"], cli.deps);
   assert.equal(code, 2);
-  assert.deepEqual(cli.err.filter((l) => l.startsWith("warning: ")), []);
+  assert.deepEqual(cli.err.map(untimed).filter((l) => l.startsWith("WARN ")), []);
 });
 
 test("a flat Code 2 on HTTP 200 from a data endpoint exits 1 with the credentials hint", async () => {
@@ -711,5 +711,5 @@ test("a flat Code 2 on HTTP 200 from a data endpoint exits 1 with the credential
   assert.equal(code, 1);
   assert.deepEqual(cli.out, []);
   assert.match(cli.err.join("\n"), /GENESIS status 2 \(ERROR\) \/ HTTP 200/);
-  assert.match(cli.err.join("\n"), /^Hint: check your credentials/m);
+  assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.api\] check your credentials/m);
 });

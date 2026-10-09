@@ -13,7 +13,7 @@ import type { CliDeps } from "../src/cli/io.js";
 import { readSecretFrom } from "../src/cli/io.js";
 import { CredentialStore, credentialValueProblem, maskCredential, resolveCredentialsPath } from "../src/cli/credentials.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, jsonResponse } from "./helpers.js";
+import { makeMockTransport, jsonResponse, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
@@ -83,7 +83,7 @@ for (const name of ["token", "username", "password"]) {
       cli.out.length = 0;
       assert.equal(await run(["config", "list"], cli.deps), 0);
       assert.deepEqual(cli.out, [`${name}  ${masked}`]);
-      assert.match(cli.err.join("\n"), /Credentials file: .*destatis-genesis\/credentials/);
+      assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.config\] Credentials file: .*destatis-genesis\/credentials/m);
 
       assert.equal(await run(["config", "unset", name], cli.deps), 0);
       assert.equal(cli.store.get(name), undefined);
@@ -221,8 +221,8 @@ test("half a login from the variables is not completed from the file", async () 
     cli.store.set("token", TOKEN);
     assert.equal(await run(["logincheck"], cli.deps), 2);
     assert.equal(cli.mt.calls.length, 0);
-    const err = cli.err.join("\n");
-    assert.match(err, /^Error: Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m);
+    const err = untimed(cli.err.join("\n"));
+    assert.match(err, /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m);
     assert.ok(!err.includes(PASSWORD) && !err.includes(TOKEN));
   } finally {
     cli.cleanup();
@@ -306,11 +306,11 @@ test("the messages that ask for credentials name destatis config set", async () 
   const cli = makeCli({ responder: () => jsonResponse(fx.flatNotAuthorized, 401) });
   try {
     assert.equal(await run(["--guest", "find", "x"], cli.deps), 1);
-    assert.match(cli.err.join("\n"), /^Hint: GENESIS refused the request without credentials\..*`destatis config set token`/m);
+    assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.api\] GENESIS refused the request without credentials\..*`destatis config set token`/m);
     cli.err.length = 0;
     cli.store.set("token", TOKEN);
     assert.equal(await run(["logincheck"], cli.deps), 1);
-    assert.match(cli.err.join("\n"), /^Hint: check your credentials .*`destatis config list`/m);
+    assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.api\] check your credentials .*`destatis config list`/m);
   } finally {
     cli.cleanup();
   }

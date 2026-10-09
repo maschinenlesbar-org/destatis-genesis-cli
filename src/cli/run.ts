@@ -4,10 +4,12 @@
 
 import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
-import type { CliDeps } from "./io.js";
+import { logOf, type CliDeps } from "./io.js";
+import { createLogger, logFormatFromArgv } from "./log.js";
 import {
   DestatisApiError,
   DestatisError,
+  DestatisNetworkError,
   DestatisUsageError,
   DestatisValidationError,
   credentialsIn,
@@ -46,7 +48,15 @@ function configureTree(command: Command, deps: CliDeps): void {
   rejectRepeatedOptions(command);
   command.configureOutput({
     writeOut: (str) => deps.io.out(str.replace(/\n$/, "")),
-    writeErr: (str) => deps.io.err(str.replace(/\n$/, "")),
+    // commander's own messages are log records too: its "error: …" an ERROR, the help it
+    // shows after one an INFO.
+    writeErr: (str) => {
+      const text = str.replace(/\n$/, "");
+      // The blank line commander writes between an error and the help it shows after.
+      if (text === "") return;
+      if (text.startsWith("error: ")) logOf(deps).error("cli", text.slice("error: ".length));
+      else logOf(deps).info("cli", text);
+    },
     outputError: (str, write) => write(withoutStrayValues(str)),
   });
   for (const child of command.commands) configureTree(child, deps);
@@ -138,6 +148,14 @@ export function withRedactedOutput(deps: CliDeps, argv: readonly string[]): CliD
 
 export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<number> {
   deps = withRedactedOutput(deps, argv);
+  // Every record goes through the redacted `io.err` — including a credential that
+  // `action()` adds later through `deps.redact` — so a secret is kept out of the log in
+  // either format.
+  const redacted = deps;
+  deps = {
+    ...deps,
+    log: createLogger({ format: logFormatFromArgv(argv), write: (line) => redacted.io.err(line), ...(deps.now === undefined ? {} : { now: deps.now }) }),
+  };
   try {
     // buildProgram is inside the try: seeding env credentials validates them and
     // may throw a DestatisUsageError (GEN-06), which must be caught and mapped to
@@ -156,15 +174,16 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       // 1 and 2. See DEVELOPING.md's exit-code table.
       return err.exitCode === 0 ? 0 : 2;
     }
+    const log = logOf(deps);
     if (err instanceof DestatisValidationError || err instanceof DestatisUsageError) {
       // Bad/missing arguments or credentials -> conventional usage exit code. A
       // DestatisValidationError is the library rejecting an input before any
       // request (it extends DestatisUsageError; named here for clarity).
-      deps.io.err(`Error: ${err.message}`);
+      log.error("cli", err.message);
       return 2;
     }
     if (err instanceof DestatisApiError) {
-      deps.io.err(`Error: ${err.message}`);
+      log.error("api", err.message);
       // GENESIS signals a credential failure as HTTP 401/403 and/or a logical
       // code in a flat JSON body (15 = not authorized, 2 on a 404 = wrong
       // credentials; the engine extracts the code either way); hint at the fix.
@@ -172,13 +191,15 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       // takes no credentials (`hello` — a 401/403 there is a wrong --base-url or a
       // proxy, not a login problem).
       if (err.isAuthError && err.credentialsSent === true) {
-        deps.io.err(
-          "Hint: check your credentials (--token or --username/--password, their DESTATIS_* variables, " +
+        log.info(
+          "api",
+          "check your credentials (--token or --username/--password, their DESTATIS_* variables, " +
             "or the stored ones: `destatis config list`; `destatis config set token` replaces one).",
         );
       } else if (err.isAuthError && err.credentialsSent === false) {
-        deps.io.err(
-          "Hint: GENESIS refused the request without credentials. Set --token (env DESTATIS_API_TOKEN) " +
+        log.info(
+          "api",
+          "GENESIS refused the request without credentials. Set --token (env DESTATIS_API_TOKEN) " +
             "or --username/--password (env DESTATIS_USERNAME / DESTATIS_PASSWORD), or store them once " +
             "with `destatis config set token` (or `username` and `password`).",
         );
@@ -189,10 +210,10 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       return 1;
     }
     if (err instanceof DestatisError) {
-      deps.io.err(`Error: ${err.message}`);
+      log.error(err instanceof DestatisNetworkError ? "http" : "cli", err.message);
       return 1;
     }
-    deps.io.err(`Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
+    log.error("cli", `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
 }

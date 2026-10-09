@@ -20,7 +20,8 @@ src/
     client.ts    # DestatisClient — helloworld/find + catalogue/metadata/data groups
     index.ts
   cli/
-    io.ts        # injectable I/O + env seam (CliDeps / CliIO), readSecretFrom
+    io.ts        # injectable I/O + env seam (CliDeps / CliIO), readSecretFrom, the logger and the clock
+    log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     credentials.ts # CredentialStore — the credentials file behind `destatis config`
     shared.ts    # option parsers, credential resolution, option->client mapping, render
     commands/    # hello, find, catalogue, metadata, data, config
@@ -51,7 +52,7 @@ reason a value is invalid, or `undefined`). The client enforces them before any
 request through `assertValid(name, value, problem)`, which throws
 **`DestatisValidationError`** (`Invalid <name>: <reason>`); a client method
 rejects its promise, a constructor throws. `DestatisValidationError` extends
-`DestatisUsageError`, so `run.ts` maps it to exit 2 and prints `Error: <message>`.
+`DestatisUsageError`, so `run.ts` maps it to exit 2 and logs it as an `ERROR` record of `destatis.cli`.
 The CLI's commander parsers call the same `…Problem` functions and turn a reason
 into commander's `InvalidArgumentError` (exit 2 too).
 
@@ -407,8 +408,8 @@ for every transport (P5):
   exported) returns one sentence for a remote `http:` base URL — `requests to <host>
   are sent unencrypted (http:, not https:)`, or `the token is sent unencrypted to
   <host> (…)` / `the login is …` when credentials go along — and `undefined` for
-  `https:`, an unparsable URL and loopback hosts. `action()` (shared.ts) prints it
-  as `warning: <sentence>` once per run, after the options and credentials are
+  `https:`, an unparsable URL and loopback hosts. `action()` (shared.ts) logs it
+  as a `WARN` record of `destatis.http` once per run, after the options and credentials are
   checked and before the first request; help, `--version` and usage errors never
   warn. `hello` sends no credentials, so its warning names none.
 
@@ -427,7 +428,8 @@ configuration validation, P5 transport contract, P6 retry policy, P7 pipes and e
 codes, P8/P9/P13 responses and errors, P18 GENESIS access check, P20 the
 plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userinfo),
 P21 README links (a relative link in `README.md` must point to a file `files` ships;
-other documents are linked by their GitHub URL, since npmjs.com shows the README).
+other documents are linked by their GitHub URL, since npmjs.com shows the README),
+P23 the log on stderr (record format, `--log-format jsonl`, no secret in either format).
 
 ## Verified against a live account (2026-07-03)
 
@@ -479,3 +481,26 @@ npm run build                        # the CLI, for the command reference
 cd site && npm ci && bundle install  # once (Node >= 22.12, Ruby 3.4, Bundler)
 npm run serve                        # http://127.0.0.1:4000/destatis-genesis-cli/
 ```
+
+## The log on stderr
+
+Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp, a level
+(`ERROR`, `WARN`, `INFO`) and a topic, `destatis.<area>`. `--log-format text` (the default)
+writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
+`--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
+and `msg`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
+reply that does not parse, the warning about a credential given as a flag), `api`
+(GENESIS's error answers and the credentials hints after them), `http` (the connection,
+the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
+(`Wrote N bytes …`). Code logs through `logOf(deps)` and never writes diagnostics with
+`io.err` directly. `run()` builds the logger from argv before commander parses it, so
+commander's own usage errors are records too (after `withoutStrayValues` has dropped a
+stray value from them), and on top of the redacted `io.err`, so a secret is kept out of
+the log in either format — including a credential read from the credentials file, which
+`action()` hands to `CliDeps.redact` and the same `io.err` then redacts. `CliDeps.now`
+makes the timestamps testable. stdout carries data only. Left raw, because they are not
+log records: the no-echo prompt of `destatis config set` (`readSecretFrom`, straight to
+`process.stderr`), and, outside `run()`, the bin shim's `Output error: …`
+(`handleOutputErrors`, when stdout itself fails) and its last-resort `Unexpected error: …`
+when `run()` itself rejects. Conformance test P23 checks all of this, and its body is
+shared across the *-cli repos.

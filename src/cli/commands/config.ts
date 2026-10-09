@@ -8,7 +8,7 @@ import { InvalidArgumentError } from "commander";
 import { DestatisError, DestatisUsageError } from "../../client/errors.js";
 import { credentialProblem } from "../../client/validate.js";
 import { CONFIG_DIR_NAME, credentialValueProblem, maskCredential, type CredentialStore } from "../credentials.js";
-import type { CliDeps } from "../io.js";
+import { logOf, type CliDeps } from "../io.js";
 
 /**
  * The credentials this program knows: a token, or a username and password — the
@@ -73,7 +73,7 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
       if (reason !== undefined) throw new DestatisUsageError(`${reason} Nothing was stored.`);
       const store = storeOf(deps);
       store.set(name, value);
-      deps.io.err(`Stored ${name} (${maskCredential(value)}) in ${store.path}.`);
+      logOf(deps).info("config", `Stored ${name} (${maskCredential(value)}) in ${store.path}.`);
     });
 
   config
@@ -95,7 +95,7 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
     .action(async (name: string) => {
       const store = storeOf(deps);
       if (!store.unset(name)) throw new DestatisError(`No ${name} is stored in ${store.path}.`);
-      deps.io.err(`Removed ${name} from ${store.path}.`);
+      logOf(deps).info("config", `Removed ${name} from ${store.path}.`);
     });
 
   config
@@ -105,6 +105,6 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
       const store = storeOf(deps);
       const all = store.all();
       for (const name of Object.keys(all).sort()) deps.io.out(`${name}  ${maskCredential(all[name] as string)}`);
-      deps.io.err(`Credentials file: ${store.path}`);
+      logOf(deps).info("config", `Credentials file: ${store.path}`);
     });
 }
