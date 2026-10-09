@@ -625,3 +625,13 @@ test("a server detail cut at 500 (or a plain-text snippet at 200) characters kee
     }
   }
 });
+
+test("own messages quote a server value at most MAX_MESSAGE_VALUE_LENGTH characters long (L3)", async () => {
+  const long = "x".repeat(5000);
+  // A GENESIS Status.Type of 5000 characters: the message quotes it cut.
+  const typed = new RequestEngine({ transport: async () => ({ status: 200, headers: { "content-type": "application/json" }, body: Buffer.from(JSON.stringify({ Status: { Code: 7, Content: "c", Type: `Fehler ${long}` } })) }) });
+  await assert.rejects(typed.postJson("/find/find", {}, {}), (err: Error) => err.message.length < 1200 && /\(Fehler x+…\)/.test(err.message));
+  // An unknown charset of 5000 characters.
+  const charset = new RequestEngine({ transport: async () => ({ status: 200, headers: { "content-type": `application/json; charset=${long}` }, body: Buffer.from("{}") }) });
+  await assert.rejects(charset.postJson("/find/find", {}, {}), (err: Error) => err.message.length < 1200 && /charset "x+…"/.test(err.message));
+});

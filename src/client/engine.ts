@@ -27,7 +27,7 @@ import {
   DestatisNetworkError,
   DestatisParseError,
   credentialsIn,
-  cutText,
+  cutForMessage,
   redactCredentials,
   redactSecrets,
 } from "./errors.js";
@@ -488,7 +488,7 @@ function decodeBody(body: Buffer, contentType: string, path: string): string {
   try {
     decoder = new TextDecoder(charset);
   } catch {
-    throw new DestatisParseError(`Unsupported response charset "${sanitizeServerText(charset)}" from ${path}.`);
+    throw new DestatisParseError(`Unsupported response charset "${cutForMessage(sanitizeServerText(charset))}" from ${path}.`);
   }
   return decoder.decode(body);
 }
@@ -1051,7 +1051,7 @@ export class RequestEngine {
         // intact, so sanitize below.
         const snippet = text.trim().replace(/\s+/g, " ");
         if (snippet.length > 0 && !snippet.startsWith("<")) {
-          detail = snippet.length > 200 ? `${cutText(snippet, 200)}…` : snippet;
+          detail = cutForMessage(snippet, 200);
         }
       }
       // All branches take server-controlled text; strip terminal control chars

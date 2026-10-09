@@ -153,7 +153,9 @@ What the library rejects:
   string parameter object used to send `0=x`. Server text in an error (`detail` and
   the message) is cut at `MAX_MESSAGE_VALUE_LENGTH` (500) characters, never inside a
   surrogate pair (`cutText`), so the message stays well-formed; `body` keeps the
-  full answer.
+  full answer. Every other server value an own message quotes (a `Status.Type`, a
+  charset) goes through the same `cutForMessage`, so `err.message` stays bounded for a
+  library caller.
 - **Half a credential pair** (`credentialPairProblem`): with no token, a
   `username` without a `password` (or the reverse) throws at construction —
   `Invalid credentials: Provide both username and password (or a token).` A lone
@@ -499,8 +501,9 @@ the message (text) or the whole JSON object (jsonl), which writes CR and LF as `
 every other C0 control but TAB, DEL and C1 as `\u00XX`, and U+2028, U+2029 and the bidi
 controls as `\uXXXX`, so no text that reaches a record, by whatever path, can split it,
 forge another one or steer the terminal. Before that a lone surrogate (half a
-character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`).
-The areas are `cli` (usage errors, commander's messages, unexpected errors, a
+character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`),
+and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
+code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
 reply that does not parse, the warning about a credential given as a flag), `api`
 (GENESIS's error answers and the credentials hints after them), `http` (the connection,
 the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
