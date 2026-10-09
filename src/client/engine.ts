@@ -27,6 +27,7 @@ import {
   DestatisNetworkError,
   DestatisParseError,
   credentialsIn,
+  cutText,
   redactCredentials,
   redactSecrets,
 } from "./errors.js";
@@ -1050,7 +1051,7 @@ export class RequestEngine {
         // intact, so sanitize below.
         const snippet = text.trim().replace(/\s+/g, " ");
         if (snippet.length > 0 && !snippet.startsWith("<")) {
-          detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
+          detail = snippet.length > 200 ? `${cutText(snippet, 200)}…` : snippet;
         }
       }
       // All branches take server-controlled text; strip terminal control chars

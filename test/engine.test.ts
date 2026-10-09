@@ -6,6 +6,8 @@ import {
   DestatisNetworkError,
   DestatisParseError,
   DestatisValidationError,
+  cutText,
+  toWellFormed,
 } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -601,4 +603,25 @@ test("server text in an error is cut at 500 characters; the body keeps it all (P
     assert.ok(err.body.includes(long));
     return true;
   });
+});
+
+test("cutText never cuts inside a surrogate pair; toWellFormed replaces half a character", () => {
+  assert.equal(cutText("ab\u{1f600}cd", 3), "ab");
+  assert.equal(cutText("ab\u{1f600}cd", 4), "ab\u{1f600}");
+  assert.equal(cutText("short", 10), "short");
+  assert.equal(toWellFormed("a\ud83d b\ude00 \u{1f600}"), "a\ufffd b\ufffd \u{1f600}");
+});
+
+test("a server detail cut at 500 (or a plain-text snippet at 200) characters keeps the message well-formed", async () => {
+  for (const shape of ["json", "text"]) {
+    for (const detail of ["a" + "\u{1f600}".repeat(400), "\u{1f600}".repeat(400)]) {
+      const body = shape === "json" ? JSON.stringify({ Status: { Code: -1, Content: detail, Type: "Fehler" } }) : detail;
+      const e = new RequestEngine({ transport: async () => ({ status: shape === "json" ? 200 : 500, headers: { "content-type": shape === "json" ? "application/json" : "text/plain" }, body: Buffer.from(body) }) });
+      await assert.rejects(e.postJson("/find/find", {}, {}), (err: Error) => {
+        assert.equal(toWellFormed(err.message), err.message, `${shape}: ${err.message.slice(-20)}`);
+        assert.match(err.message, /…/);
+        return true;
+      });
+    }
+  }
 });
