@@ -530,9 +530,11 @@ ERROR record (`writeCommanderErr`). The log is built with the run's redaction (`
 replaces a secret in the message only, before it is escaped: the frame is never touched,
 and a secret is kept out of the log in either format — including a credential read from
 the credentials file, which `action()` hands to `CliDeps.redact`. `CliDeps.now`
-makes the timestamps testable. stdout carries data only. Left raw, because they are not
-log records: the no-echo prompt of `destatis config set` (`readSecretFrom`, straight to
-`process.stderr`), and, outside `run()`, the bin shim's `Output error: …`
-(`handleOutputErrors`, when stdout itself fails) and its last-resort `Unexpected error: …`
-when `run()` itself rejects. Conformance test P23 checks all of this, and its body is
+makes the timestamps testable. stdout carries data only. Left raw, because it is not a
+log record: the no-echo prompt of `destatis config set` (`readSecretFrom`, straight to
+`process.stderr`). Outside `run()`, the bin shim logs through `processLogger(argv)` (the
+format argv asks for, the run's redaction): a stdout write error other than a closed
+pipe is an ERROR record of `destatis.output` (`Could not write to stdout: …`,
+`handleOutputErrors`, exit 1), and a rejection of `run()` itself an ERROR record of
+`destatis.cli` (`Unexpected error: …`). Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.
