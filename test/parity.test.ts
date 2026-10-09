@@ -520,7 +520,7 @@ test("parity #5 control: a base URL with a path prefix sends the identical reque
 
 // ---- Finding 3 (PAT-7): username and password come as a pair --------------------------
 
-const PAIR_CLI = /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m;
+const PAIR_CLI = /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\. Set: (--username|--password|DESTATIS_USERNAME|DESTATIS_PASSWORD) only\.$/m;
 const PAIR_LIB = /^Invalid credentials: Provide both username and password \(or a token\)\.$/;
 
 const pairCases: Array<{ label: string; argv: string[]; env?: Record<string, string>; lib: (t: Transport) => Promise<unknown> }> = [

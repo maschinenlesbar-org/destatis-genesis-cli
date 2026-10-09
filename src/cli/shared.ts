@@ -268,6 +268,21 @@ function storedCredentials(deps: CliDeps): ResolvedCredentials | undefined {
 }
 
 /**
+ * Whether the credentials file holds any part of a login, for a message about a half
+ * login given another way: the user who stored one believes it is in effect. Only the
+ * names are looked at; a file that cannot be read counts as holding none (the run
+ * fails on the half login anyway, and the file is not what it needed).
+ */
+function holdsStoredLogin(deps: CliDeps): boolean {
+  if (deps.credentials === undefined) return false;
+  try {
+    return deps.credentials().names().some((name) => name === "token" || name === "username" || name === "password");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build the client, rewording the library's credential errors (a token with a
  * login, a half pair, no access mode, guest with credentials) with the flags and
  * env vars — naming where each credential came from, never its value.
@@ -297,7 +312,11 @@ function createClient(
           (fromFile
             ? ` The credentials file holds no ${options.username === undefined ? "username" : "password"}: ` +
               `\`destatis config set ${options.username === undefined ? "username" : "password"}\` stores it.`
-            : ""),
+            : ` Set: ${setBy.join(", ")} only.` +
+              (holdsStoredLogin(deps)
+                ? " A login is stored in the credentials file, but it is not read while a flag or a DESTATIS_* " +
+                  `variable gives any credential: remove ${setBy.join(" and ")} to use it.`
+                : "")),
         { cause: err },
       );
     }

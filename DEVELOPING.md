@@ -242,7 +242,8 @@ variables, mixed), is two logins whose intended one can't be told: the library
 refuses it (`tokenOrLoginProblem`, see above) and the CLI rewords that as a usage
 error naming the sources (exit 2, no request). Supplying only one of
 username/password is rejected by the library (see below) and reworded by the CLI
-with the flags (exit 2).
+with the flags (exit 2), naming the half that was set and where (`Set: DESTATIS_USERNAME
+only.`) and, when the credentials file holds a login, that it was set aside.
 
 The **credentials file** is the CLI's, not the library's: `src/cli/credentials.ts`
 (`CredentialStore`, the same mechanism as openka-cli's `ka config`) and `destatis

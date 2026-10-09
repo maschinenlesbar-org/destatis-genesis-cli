@@ -225,8 +225,38 @@ test("half a login from the variables is not completed from the file", async () 
     assert.equal(await run(["logincheck"], cli.deps), 2);
     assert.equal(cli.mt.calls.length, 0);
     const err = untimed(cli.err.join("\n"));
-    assert.match(err, /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\.$/m);
+    assert.match(
+      err,
+      /^ERROR \[destatis\.cli\] Provide BOTH --username and --password \(or use --token\)\. Env: DESTATIS_USERNAME \+ DESTATIS_PASSWORD, or DESTATIS_API_TOKEN\. Set: DESTATIS_USERNAME only\. A login is stored in the credentials file, but it is not read while a flag or a DESTATIS_\* variable gives any credential: remove DESTATIS_USERNAME to use it\.$/m,
+    );
     assert.ok(!err.includes(PASSWORD) && !err.includes(TOKEN));
+  } finally {
+    cli.cleanup();
+  }
+});
+
+test("half a login names where it came from, and a stored login it set aside (01-1)", async () => {
+  const cli = makeCli();
+  try {
+    // A flag's half next to a full stored login.
+    cli.store.set("username", USERNAME);
+    cli.store.set("password", PASSWORD);
+    assert.equal(await run(["--password", "flagpw123", "logincheck"], cli.deps), 2);
+    assert.match(cli.err.join("\n"), /Set: --password only\. A login is stored in the credentials file, but it is not read .*: remove --password to use it\./);
+    assert.equal(cli.mt.calls.length, 0);
+    // No stored login: the source is named, the file is not mentioned.
+    cli.err.length = 0;
+    cli.store.unset("username");
+    cli.store.unset("password");
+    assert.equal(await run(["logincheck"], { ...cli.deps, env: { DESTATIS_USERNAME: "envuser123" } }), 2);
+    assert.match(cli.err.join("\n"), /Set: DESTATIS_USERNAME only\.$/m);
+    assert.doesNotMatch(cli.err.join("\n"), /credentials file/);
+    // A credentials file that cannot be read is not mentioned either, and does not stop the message.
+    cli.err.length = 0;
+    cli.store.set("token", TOKEN);
+    chmodSync(cli.store.path, 0o644);
+    assert.equal(await run(["logincheck"], { ...cli.deps, env: { DESTATIS_PASSWORD: "envpass123" } }), 2);
+    assert.match(cli.err.join("\n"), /Set: DESTATIS_PASSWORD only\.$/m);
   } finally {
     cli.cleanup();
   }

@@ -88,7 +88,8 @@ stored exactly as given — spaces inside a password are fine; a blank value, a 
 break or leading/trailing whitespace is refused (exit 2). The file is consulted only
 when no flag and no `DESTATIS_*` variable gives **any** credential, and then as a
 whole: one login is never pieced together from the file and a flag or variable, so a
-stored password does not complete a `DESTATIS_USERNAME`. The file's own login follows
+stored password does not complete a `DESTATIS_USERNAME` (the error names the half that
+was set, and the stored login it set aside). The file's own login follows
 the same rules — a stored token next to a stored username or password, or half a
 pair, exits 2. `--guest` and `destatis hello` don't read it; a stored value read is
 redacted from everything printed, like a flag's. `get`, `list` and the record `set`
