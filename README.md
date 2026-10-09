@@ -82,7 +82,8 @@ destatis config unset token
 The value is never taken from the command line, so it reaches neither shell history
 nor `ps`. The file is `$XDG_CONFIG_HOME/destatis-genesis/credentials` (else
 `~/.config/destatis-genesis/credentials`): mode 0600 in a directory of mode 0700,
-replaced atomically, and not read at all while anyone else could read it. A value is
+replaced atomically by one writer at a time (`credentials.lock` beside it; a second
+`config set` waits up to 2 s, then fails with exit 1 and changes nothing), and not read at all while anyone else could read it. A value is
 stored exactly as given — spaces inside a password are fine; a blank value, a line
 break or leading/trailing whitespace is refused (exit 2). The file is consulted only
 when no flag and no `DESTATIS_*` variable gives **any** credential, and then as a
