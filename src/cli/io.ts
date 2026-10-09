@@ -53,7 +53,8 @@ export interface CliDeps {
   /**
    * Keep `value` out of everything printed from here on (`***`), like a credential
    * from a flag or a variable. `run()` sets it; `action()` calls it for a credential
-   * read from the credentials file, which the server may echo back (`logincheck`).
+   * read from the credentials file, which the server may echo back (`logincheck`), and
+   * `config get` and `config set` for the value they read.
    */
   redact?(value: string): void;
   /**

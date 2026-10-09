@@ -252,7 +252,8 @@ together from two places. Its values go through the same library checks (token w
 login, half a pair; reworded naming `the stored token` etc.), a stored value the
 library would refuse is a `DestatisError` (exit 1) naming the credential, and every
 value read is handed to `CliDeps.redact` (set by `run()`'s `withRedactedOutput`) so a
-server echo of it prints `***`. `config set` reads through `CliIO.readSecret`
+server echo of it prints `***`; `config get` and `config set` do the same with the
+value they read (`config get --reveal` prints through the unredacted `io.outRaw`). `config set` reads through `CliIO.readSecret`
 (`readSecretFrom`: raw mode without echo on a terminal, the whole input from a pipe,
 at most 64 KiB either way), never from argv. On a terminal it drops escape sequences
 (arrow keys, bracketed-paste markers), keeps every other character and refuses a paste
