@@ -6,6 +6,7 @@ import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
+import { credentialsIn } from "../src/client/errors.js";
 
 function makeCli(
   responder: (req: HttpRequest) => HttpResponse,
@@ -712,4 +713,16 @@ test("a flat Code 2 on HTTP 200 from a data endpoint exits 1 with the credential
   assert.deepEqual(cli.out, []);
   assert.match(cli.err.join("\n"), /GENESIS status 2 \(ERROR\) \/ HTTP 200/);
   assert.match(untimed(cli.err.join("\n")), /^INFO  \[destatis\.api\] check your credentials/m);
+});
+
+test("an a:b@c argument (here a User-Agent) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {
+  const env = { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" };
+  const cli = makeCli(() => jsonResponse({ ...fx.findResult, Copyright: "run:2026-10-09@x" }), env);
+  assert.equal(await run(["--user-agent", "run:2026-10-09@x", "find", "x"], cli.deps), 0, cli.err.join("\n"));
+  assert.match(cli.out.join("\n"), /"Copyright": "run:2026-10-09@x"/);
+  const written = makeCli(() => jsonResponse(fx.findResult), env);
+  assert.equal(await run(["-o", "run:2026-10-09@x.json", "find", "x"], written.deps), 0);
+  assert.match(untimed(written.err.join("\n")), /Wrote \d+ bytes to run:2026-10-09@x\.json/);
+  assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
+  assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
