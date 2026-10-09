@@ -90,7 +90,9 @@ whole: one login is never pieced together from the file and a flag or variable, 
 stored password does not complete a `DESTATIS_USERNAME`. The file's own login follows
 the same rules — a stored token next to a stored username or password, or half a
 pair, exits 2. `--guest` and `destatis hello` don't read it; a stored value read is
-redacted from everything printed, like a flag's.
+redacted from everything printed, like a flag's. `get`, `list` and the record `set`
+logs show a value masked: a token as `0123…cdef`, a password never (`****`), and any
+value below 20 characters as `****` too.
 
 Precedence is **flags > `DESTATIS_*` variables** (per field) **> the credentials file >
 none**.

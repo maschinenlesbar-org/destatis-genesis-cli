@@ -64,7 +64,8 @@ function makeCli(
 for (const name of ["token", "username", "password"]) {
   test(`config set ${name} stores the value from the prompt, mode 0600 in a 0700 directory, and shows it masked`, async () => {
     const value = VALUES[name] as string;
-    const masked = `${value.slice(0, 4)}…${value.slice(-4)}`;
+    // Only the 32-character token shows its ends; the username is shorter than 20, and a password never shows.
+    const masked = name === "token" ? `${value.slice(0, 4)}…${value.slice(-4)}` : "****";
     const cli = makeCli({ secret: `${value}\n` });
     try {
       assert.equal(await run(["config", "set", name], cli.deps), 0, cli.err.join("\n"));
@@ -101,7 +102,7 @@ test("config list shows every stored credential, sorted and masked", async () =>
     cli.store.set("username", USERNAME);
     cli.store.set("password", PASSWORD);
     assert.equal(await run(["config", "list"], cli.deps), 0);
-    assert.deepEqual(cli.out, ["password  corr…tery", "username  alic…mple"]);
+    assert.deepEqual(cli.out, ["password  ****", "username  ****"]);
   } finally {
     cli.cleanup();
   }
@@ -370,4 +371,29 @@ test("a stored value the library would refuse fails the run with exit 1, naming 
 test("a secret piped in is read whole, one trailing newline dropped", async () => {
   assert.equal(await readSecretFrom(Readable.from([`${PASSWORD}\n`]), { write: () => true }, "password: "), PASSWORD);
   assert.equal(await readSecretFrom(Readable.from([TOKEN.slice(0, 16), `${TOKEN.slice(16)}\r\n`]), { write: () => true }, "token: "), TOKEN);
+});
+
+test("maskCredential: a value shows its ends only from 20 characters, a password never (C7)", () => {
+  assert.equal(maskCredential("Sommer2026!x"), "****");
+  assert.equal(maskCredential("a".repeat(19)), "****");
+  assert.equal(maskCredential("abcd0123456789abwxyz"), "abcd…wxyz");
+  assert.equal(maskCredential(TOKEN, "token"), "0123…cdef");
+  assert.equal(maskCredential("a-very-long-password-of-40-characters!!!", "password"), "****");
+});
+
+test("a stored password is never partly shown: not by set, get or list (C7)", async () => {
+  for (const secret of ["Sommer2026!x", "a-very-long-password-of-40-characters!!!"]) {
+    const cli = makeCli({ secret });
+    try {
+      assert.equal(await run(["config", "set", "password"], cli.deps), 0, cli.err.join("\n"));
+      assert.match(cli.err.join("\n"), /Stored password \(\*\*\*\*\) in /);
+      assert.equal(await run(["config", "get", "password"], cli.deps), 0);
+      assert.equal(await run(["config", "list"], cli.deps), 0);
+      assert.deepEqual(cli.out, ["****", "password  ****"]);
+      const all = cli.out.join("\n") + cli.err.join("\n");
+      assert.ok(!all.includes(secret.slice(0, 4)) && !all.includes(secret.slice(-4)), all);
+    } finally {
+      cli.cleanup();
+    }
+  }
 });
