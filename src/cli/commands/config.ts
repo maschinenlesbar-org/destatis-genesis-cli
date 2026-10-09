@@ -9,6 +9,7 @@ import { DestatisError, DestatisUsageError } from "../../client/errors.js";
 import { credentialProblem } from "../../client/validate.js";
 import { CONFIG_DIR_NAME, credentialValueProblem, maskCredential, type CredentialStore } from "../credentials.js";
 import { logOf, type CliDeps } from "../io.js";
+import type { GlobalOptions } from "../shared.js";
 
 /**
  * The credentials this program knows: a token, or a username and password — the
@@ -46,7 +47,15 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
     .description(
       `the GENESIS login, kept in a credentials file of its own: $XDG_CONFIG_HOME/${CONFIG_DIR_NAME}/credentials, ` +
         `else ~/.config/${CONFIG_DIR_NAME}/credentials (${names}); used when no flag and no DESTATIS_* variable gives a credential`,
-    );
+    )
+    // `config get --reveal -o token.txt` used to print the value on the terminal and write
+    // no file. A secret written to a file is a job for `> file` and the user's own umask.
+    .hook("preAction", (_config, command) => {
+      const output = (command.optsWithGlobals() as GlobalOptions).output;
+      if (output !== undefined && output !== "-") {
+        throw new DestatisUsageError("destatis config prints to stdout only: --output is refused; redirect stdout instead.");
+      }
+    });
 
   config
     .command("set")

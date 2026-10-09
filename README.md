@@ -92,7 +92,9 @@ the same rules — a stored token next to a stored username or password, or half
 pair, exits 2. `--guest` and `destatis hello` don't read it; a stored value read is
 redacted from everything printed, like a flag's. `get`, `list` and the record `set`
 logs show a value masked: a token as `0123…cdef`, a password never (`****`), and any
-value below 20 characters as `****` too.
+value below 20 characters as `****` too. `destatis config` prints to stdout only: `-o`
+is refused (redirect stdout instead), so a value never lands on the terminal when a
+file was asked for.
 
 Precedence is **flags > `DESTATIS_*` variables** (per field) **> the credentials file >
 none**.

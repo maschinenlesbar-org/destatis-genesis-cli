@@ -28,7 +28,7 @@ none. `destatis config` keeps the login in `$XDG_CONFIG_HOME/destatis-genesis/cr
 from stdin, never from the command line; `config get <name>` shows it masked
 (`abcd…wxyz`; `****` for a password and for any value below 20 characters; `--reveal`
 prints it whole); `config list` and `config unset <name>` do what they
-say. The file is read only when no flag and no variable gives any credential, and
+say. `destatis config` prints to stdout only and refuses `-o` (exit 2). The file is read only when no flag and no variable gives any credential, and
 then as a whole (never combined with a flag or variable); its login follows the same
 rules (a token with a username or password, or half a pair, exits 2). A file that
 others can read is refused (exit 1, naming `chmod 600`), and only when it is needed;
