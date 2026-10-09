@@ -6,6 +6,7 @@ import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
 import { escapeControlChars } from "./shared.js";
 import { OutputError, logOf, type CliDeps } from "./io.js";
+import { CredentialsFileError } from "./credentials.js";
 import { DEFAULT_LOG_FORMAT, createLogger, logFormatFromArgv, type LogFormat, type Logger } from "./log.js";
 import {
   DestatisApiError,
@@ -254,6 +255,16 @@ export function processLogger(argv: readonly string[], env: Record<string, strin
   });
 }
 
+/**
+ * The log area of a `DestatisError` that is neither an API error nor a usage error: the
+ * connection (`http`), the credentials file (`config`, like its successes), else `cli`.
+ */
+function areaOf(err: DestatisError): string {
+  if (err instanceof DestatisNetworkError) return "http";
+  if (err instanceof CredentialsFileError) return "config";
+  return "cli";
+}
+
 export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<number> {
   // The log replaces the secrets of the run in every message, in either format —
   // including a credential that `action()` adds later through `deps.redact`.
@@ -325,7 +336,7 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       return 1;
     }
     if (err instanceof DestatisError) {
-      log.error(err instanceof DestatisNetworkError ? "http" : "cli", err.message);
+      log.error(areaOf(err), err.message);
       return 1;
     }
     log.error("cli", `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);

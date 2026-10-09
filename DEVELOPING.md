@@ -515,7 +515,11 @@ and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cu
 code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
 reply that does not parse, the warning about a credential given as a flag), `api`
 (GENESIS's error answers and the credentials hints after them), `http` (the connection,
-the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
+the cleartext warning), `config` (the credentials file: what `destatis config
+set|unset|list` did, and every failure to read, write or use the file — a
+`CredentialsFileError`, exit 1 — whether `config` or a command that needs the login
+read it; a usage error of `config`, such as a refused name or value, stays `cli`) and
+`output`
 (the `-o` file written, `Wrote N bytes …`, or any failure to write it: an `OutputError`,
 still exit 2; and a stdout write error). Code logs through `logOf(deps)` and never writes diagnostics with
 `io.err` directly. `run()` builds the logger from argv before commander parses it

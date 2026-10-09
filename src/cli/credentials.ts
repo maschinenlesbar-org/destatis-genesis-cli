@@ -19,6 +19,13 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { DestatisError, DestatisUsageError } from "../client/errors.js";
 
+/**
+ * The credentials file could not be read or written, holds nothing under a name, or holds
+ * a value that cannot be used. Exit 1, logged as an ERROR of `destatis.config`, the area
+ * of the credentials file, like its successes (`Stored …`, `Removed …`).
+ */
+export class CredentialsFileError extends DestatisError {}
+
 /** The directory under `$XDG_CONFIG_HOME` (or `~/.config`) this program keeps its credentials in. */
 export const CONFIG_DIR_NAME = "destatis-genesis";
 
@@ -96,7 +103,7 @@ function blockFor(ms: number): void {
 /**
  * The credentials file. Reading it checks what ssh checks of a private key: a regular
  * file, owned by this user, readable by nobody else — anything else is a
- * `DestatisError` (exit 1) naming the fix, rather than a login quietly used from a
+ * `CredentialsFileError` (exit 1) naming the fix, rather than a login quietly used from a
  * file others can read.
  */
 export class CredentialStore {
@@ -193,7 +200,7 @@ export class CredentialStore {
         continue;
       }
       if (this.#now() - start >= LOCK_WAIT_MS) {
-        throw new DestatisError(`Another destatis config is writing ${this.path}; try again.`);
+        throw new CredentialsFileError(`Another destatis config is writing ${this.path}; try again.`);
       }
       this.#sleep(LOCK_RETRY_MS);
     }
@@ -218,15 +225,15 @@ export class CredentialStore {
       stats = lstatSync(this.path);
     } catch (err) {
       if ((err as { code?: unknown }).code === "ENOENT") return {};
-      throw new DestatisError(`Could not read the credentials file ${this.path}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      throw new CredentialsFileError(`Could not read the credentials file ${this.path}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     }
-    if (!stats.isFile()) throw new DestatisError(`${this.path} is not a regular file; it cannot be the credentials file.`);
+    if (!stats.isFile()) throw new CredentialsFileError(`${this.path} is not a regular file; it cannot be the credentials file.`);
     if (process.platform !== "win32") {
       if (typeof process.getuid === "function" && stats.uid !== process.getuid()) {
-        throw new DestatisError(`The credentials file ${this.path} belongs to another user; it is not read.`);
+        throw new CredentialsFileError(`The credentials file ${this.path} belongs to another user; it is not read.`);
       }
       if ((stats.mode & 0o077) !== 0) {
-        throw new DestatisError(
+        throw new CredentialsFileError(
           `The credentials file ${this.path} can be read by others (mode ${(stats.mode & 0o777).toString(8)}); ` +
             `it is not used until only you can: chmod 600 ${this.path}`,
         );
@@ -236,10 +243,10 @@ export class CredentialStore {
     try {
       parsed = JSON.parse(readFileSync(this.path, "utf8"));
     } catch (err) {
-      throw new DestatisError(`The credentials file ${this.path} is not valid JSON; fix it, or remove it and set the values again.`, { cause: err });
+      throw new CredentialsFileError(`The credentials file ${this.path} is not valid JSON; fix it, or remove it and set the values again.`, { cause: err });
     }
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) || !Object.values(parsed).every((value) => typeof value === "string")) {
-      throw new DestatisError(`The credentials file ${this.path} is not an object of names and strings.`);
+      throw new CredentialsFileError(`The credentials file ${this.path} is not an object of names and strings.`);
     }
     return { ...(parsed as Record<string, string>) };
   }
@@ -267,7 +274,7 @@ export class CredentialStore {
   }
 
   /** "Could not write the credentials file <path>: <reason>", the cause kept. */
-  private writeError(err: unknown): DestatisError {
-    return new DestatisError(`Could not write the credentials file ${this.path}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+  private writeError(err: unknown): CredentialsFileError {
+    return new CredentialsFileError(`Could not write the credentials file ${this.path}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
 }

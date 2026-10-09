@@ -5,6 +5,7 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { OutputError, logOf, type CliDeps } from "./io.js";
+import { CredentialsFileError } from "./credentials.js";
 import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
@@ -255,7 +256,7 @@ function storedCredentials(deps: CliDeps): ResolvedCredentials | undefined {
     if (value === undefined) continue;
     const reason = credentialProblem(value);
     if (reason !== undefined) {
-      throw new DestatisError(
+      throw new CredentialsFileError(
         `The ${key} stored in ${store.path} cannot be sent: ${reason} Replace it: destatis config set ${key}`,
       );
     }

@@ -129,9 +129,10 @@ Errors and diagnostics go to stderr, so piping stdout into `jq` stays clean. Eac
 on stderr is a **log record**: a timestamp (UTC), a level (`ERROR`, `WARN`, `INFO`) and a
 topic, the program and the area it comes from (`destatis.cli` for usage errors and the
 credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers and the
-credentials hint, `destatis.http` for the connection, `destatis.config`,
-`destatis.output` for the `-o` file and stdout, written or not). By default it is written log4j style; `--log-format jsonl` writes one
-JSON object per line instead. A record is always one line: a line break, a control
+credentials hint, `destatis.http` for the connection, `destatis.config` for the
+credentials file, `destatis.output` for the `-o` file and stdout — each with its
+successes and its failures). By default it is written log4j style; `--log-format jsonl`
+writes one JSON object per line instead. A record is always one line: a line break, a control
 character or a bidi control in a message (a server's text, a value you typed) is written
 as an escape (`\n`, `\u001b`, `\u202e`), so it can neither split a record nor forge
 another one, nor steer the terminal; a message longer than 4000 characters is cut and
