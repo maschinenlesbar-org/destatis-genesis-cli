@@ -517,7 +517,10 @@ reply that does not parse, the warning about a credential given as a flag), `api
 (GENESIS's error answers and the credentials hints after them), `http` (the connection,
 the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
 (`Wrote N bytes …`). Code logs through `logOf(deps)` and never writes diagnostics with
-`io.err` directly. `run()` builds the logger from argv before commander parses it, so
+`io.err` directly. `run()` builds the logger from argv before commander parses it
+(`logFormatFromArgv`, used only for the records of a parse error: the first
+`--log-format`, the value of an option that takes one skipped; a `preAction` hook then
+sets the format commander parsed, so `--user-agent --log-format=jsonl` logs text), so
 commander's own usage errors are records too (after `withoutStrayValues` has dropped a
 stray value from them): its `error: …` an ERROR of `cli` (a `(Did you mean …?)` line
 joined to it), the help it shows after one an INFO record per line, and a command group

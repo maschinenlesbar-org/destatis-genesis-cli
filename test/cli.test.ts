@@ -726,3 +726,16 @@ test("an a:b@c argument (here a User-Agent) is neither a credential in the log n
   assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
   assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
+
+test("a parse error is logged in the format commander would have parsed: the first --log-format, an option's value skipped (L6)", async () => {
+  // --user-agent takes "--log-format" as its value; "jsonl" is then an unknown command, logged in text.
+  const ua = makeCli(() => jsonResponse(fx.findResult));
+  assert.equal(await run(["--user-agent", "--log-format", "jsonl", "find", "x"], ua.deps), 2);
+  assert.match(ua.err[0] ?? "", /^\S+ ERROR \[destatis\.cli\] unknown command 'jsonl'/);
+  // A repeated --log-format is refused; the refusal is in the first one's format.
+  const twice = makeCli(() => jsonResponse(fx.findResult));
+  assert.equal(await run(["--log-format", "jsonl", "--log-format", "text", "find", "x"], twice.deps), 2);
+  const record = JSON.parse(twice.err[0] ?? "") as Record<string, unknown>;
+  assert.equal(record["topic"], "destatis.cli");
+  assert.match(record["msg"] as string, /--log-format <format>' was given more than once/);
+});
