@@ -131,7 +131,10 @@ topic, the program and the area it comes from (`destatis.cli` for usage errors a
 credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers and the
 credentials hint, `destatis.http` for the connection, `destatis.config`,
 `destatis.output`). By default it is written log4j style; `--log-format jsonl` writes one
-JSON object per line instead:
+JSON object per line instead. A record is always one line: a line break, a control
+character or a bidi control in a message (a server's text, a value you typed) is written
+as an escape (`\n`, `\u001b`, `\u202e`), so it can neither split a record nor forge
+another one, nor steer the terminal:
 
 ```text
 2026-10-09T14:03:12.481Z ERROR [destatis.api] GENESIS status 2 (ERROR) / HTTP 404 for POST https://genesis.destatis.de/genesisWS/rest/2020/metadata/table: Ein Fehler ist aufgetreten. (…)

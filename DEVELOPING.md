@@ -424,6 +424,9 @@ GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
 credential injection + the one-login rule (`client.test.ts`), the credential guard
 / exit codes / env seeding (`cli.test.ts`).
 
+`test/log.test.ts` tests the record helpers of `src/cli/log.ts` on their own
+(`escapeForRecord`, `formatLogRecord`); the CLI-level checks are P23's.
+
 Conformance tests (`test/conformance-p*.test.ts`, shared across the `*-cli` repos;
 only their adapter block differs): P1 CLI redaction, P2 library redaction, P4/P19
 configuration validation, P5 transport contract, P6 retry policy, P7 pipes and exit
@@ -490,7 +493,11 @@ Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp,
 (`ERROR`, `WARN`, `INFO`) and a topic, `destatis.<area>`. `--log-format text` (the default)
 writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
 `--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
-and `msg`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
+and `msg`. A record is always one line: `formatLogRecord` runs `escapeForRecord` over
+the message (text) or the whole JSON object (jsonl), which writes CR and LF as `\r`/`\n`,
+every other C0 control but TAB, DEL and C1 as `\u00XX`, and U+2028, U+2029 and the bidi
+controls as `\uXXXX`, so no text that reaches a record, by whatever path, can split it,
+forge another one or steer the terminal. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
 reply that does not parse, the warning about a credential given as a flag), `api`
 (GENESIS's error answers and the credentials hints after them), `http` (the connection,
 the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
