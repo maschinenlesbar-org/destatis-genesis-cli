@@ -25,7 +25,7 @@ Precedence is flags > `DESTATIS_*` variables (per field) > the credentials file 
 none. `destatis config` keeps the login in `$XDG_CONFIG_HOME/destatis-genesis/credentials`
 (else `~/.config/destatis-genesis/credentials`), mode 0600, written atomically;
 `config set token|username|password` reads the value from a prompt without echo or
-from stdin, never from the command line; `config get <name>` shows it masked
+from stdin (at most 64 KiB), never from the command line; `config get <name>` shows it masked
 (`abcd…wxyz`; `****` for a password and for any value below 20 characters; `--reveal`
 prints it whole); `config list` and `config unset <name>` do what they
 say. `destatis config` prints to stdout only and refuses `-o` (exit 2). The file is read only when no flag and no variable gives any credential, and
