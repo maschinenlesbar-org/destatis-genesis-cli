@@ -739,3 +739,26 @@ test("a parse error is logged in the format commander would have parsed: the fir
   assert.equal(record["topic"], "destatis.cli");
   assert.match(record["msg"] as string, /--log-format <format>' was given more than once/);
 });
+
+test("every -o failure is an ERROR record of destatis.output, exit 2 as before (L8)", async () => {
+  const failures: Array<(cli: ReturnType<typeof makeCli>) => void> = [
+    (cli) => cli.files.set("out.json", Buffer.from("existing")), // an existing file, no --force
+    (cli) => {
+      cli.deps.io.writeFile = () => {
+        throw new Error("EACCES: permission denied, open 'out.json'");
+      };
+    },
+    (cli) => {
+      cli.deps.io.writeFile = () => {
+        throw Object.assign(new Error("EISDIR: illegal operation on a directory, open 'out.json'"), { code: "EISDIR" });
+      };
+    },
+  ];
+  for (const fail of failures) {
+    const cli = makeCli(() => jsonResponse(fx.tablesList));
+    fail(cli);
+    assert.equal(await run([...TOKEN, "-o", "out.json", "catalogue", "tables"], cli.deps), 2);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[destatis\.output\] (Refusing to overwrite|Could not write to)/m);
+    assert.doesNotMatch(cli.err.join("\n"), /Unexpected error|ERROR \[destatis\.cli\]/);
+  }
+});

@@ -4,7 +4,7 @@
 
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { logOf, type CliDeps } from "./io.js";
+import { OutputError, logOf, type CliDeps } from "./io.js";
 import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
@@ -330,12 +330,13 @@ export function toClientOptions(global: GlobalOptions, creds: ResolvedCredential
  * wrapping raw filesystem errors in a typed usage error. Refuses to clobber an
  * existing file — or to write through a symlink, dangling or not — unless --force
  * is set (fail-secure: no silent data loss), and
- * turns an ENOENT/EISDIR/EACCES from writeFile into a clean DestatisUsageError
- * instead of an untyped "Unexpected error: ENOENT: …".
+ * turns an ENOENT/EISDIR/EACCES from writeFile into a clean `OutputError` (a
+ * DestatisUsageError, exit 2, logged under `destatis.output`) instead of an untyped
+ * "Unexpected error: ENOENT: …".
  */
 function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, data: Buffer): void {
   const refuse = () =>
-    new DestatisUsageError(
+    new OutputError(
       `Refusing to overwrite existing file "${path}". Pass --force to overwrite, or choose a different --output path.`,
     );
   const force = global.force === true;
@@ -347,7 +348,7 @@ function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, dat
   } catch (err) {
     if (!force && (err as NodeJS.ErrnoException | undefined)?.code === "EEXIST") throw refuse();
     const reason = err instanceof Error ? err.message : String(err);
-    throw new DestatisUsageError(`Could not write to "${path}": ${reason}`);
+    throw new OutputError(`Could not write to "${path}": ${reason}`, { cause: err });
   }
 }
 

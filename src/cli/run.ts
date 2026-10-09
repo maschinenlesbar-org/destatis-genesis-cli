@@ -5,7 +5,7 @@
 import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
 import { escapeControlChars } from "./shared.js";
-import { logOf, type CliDeps } from "./io.js";
+import { OutputError, logOf, type CliDeps } from "./io.js";
 import { DEFAULT_LOG_FORMAT, createLogger, logFormatFromArgv, type LogFormat, type Logger } from "./log.js";
 import {
   DestatisApiError,
@@ -292,8 +292,9 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
     if (err instanceof DestatisValidationError || err instanceof DestatisUsageError) {
       // Bad/missing arguments or credentials -> conventional usage exit code. A
       // DestatisValidationError is the library rejecting an input before any
-      // request (it extends DestatisUsageError; named here for clarity).
-      log.error("cli", err.message);
+      // request (it extends DestatisUsageError; named here for clarity). An -o failure
+      // is a usage error too, logged in the area of the -o file.
+      log.error(err instanceof OutputError ? "output" : "cli", err.message);
       return 2;
     }
     if (err instanceof DestatisApiError) {

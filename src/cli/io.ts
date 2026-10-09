@@ -7,6 +7,13 @@ import { DestatisError, DestatisUsageError } from "../client/errors.js";
 import type { CredentialStore } from "./credentials.js";
 import { createLogger, type Logger } from "./log.js";
 
+/**
+ * Writing the output to the `-o` file failed (an existing file without `--force`, a
+ * directory, EACCES, …). A usage error as before (exit 2), logged as an ERROR of
+ * `destatis.output`, the area of the `-o` file.
+ */
+export class OutputError extends DestatisUsageError {}
+
 export interface CliIO {
   out(text: string): void;
   err(text: string): void;
