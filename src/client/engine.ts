@@ -248,14 +248,14 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 /**
- * Why requests to `baseUrl` travel unencrypted, as one sentence (without a
- * `warning: ` prefix), or `undefined` when they don't: for an `https:` URL, a URL
- * that doesn't parse, and a loopback host (`localhost`, 127.0.0.0/8, `::1` — a
+ * Why requests to `baseUrl` travel unencrypted, as one sentence, or `undefined`
+ * when they don't: for an `https:` URL, a URL that doesn't parse, and a loopback host (`localhost`, 127.0.0.0/8, `::1` — a
  * local mock or proxy). Otherwise the sentence names the host (`url.host`: host
  * and port, never userinfo) and what secret goes with the requests: `secrets` are
  * noun phrases such as `"the token"` or `"the login"`, and userinfo in the URL adds
  * `"the base URL's credentials"`. It never contains a secret's value. The CLI
- * prints it once per run as `warning: <sentence>` on stderr.
+ * logs it as a `WARN` record of `destatis.http` (once per run, before the first
+ * request).
  */
 export function cleartextProblem(baseUrl: string, secrets: readonly string[] = []): string | undefined {
   let url: URL;
