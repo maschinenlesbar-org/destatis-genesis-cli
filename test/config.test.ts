@@ -657,3 +657,26 @@ test("a credential a server echoes URL-encoded on a success is replaced on stdou
     cli.cleanup();
   }
 });
+
+test("a password with C1 characters that a server echoes is replaced on stdout, in the escaped form stdout prints (#6)", async () => {
+  for (const password of ["pass\u0085word123", "pass\u009bword123"]) {
+    const cli = makeCli({ responder: () => jsonResponse({ ...fx.loginOk, Username: USERNAME, Password: password }) });
+    try {
+      cli.store.set("username", USERNAME);
+      cli.store.set("password", password);
+      for (const argv of [["logincheck", "--compact"], ["logincheck"]]) {
+        cli.out.length = 0;
+        assert.equal(await run(argv, cli.deps), 0, cli.err.join("\n"));
+        const out = cli.out.join("\n");
+        assert.ok(!out.includes("word123"), `${JSON.stringify(password)} ${argv.join(" ")}: ${out}`);
+        assert.match(out, /"Password": ?"\*\*\*"/);
+      }
+      // The same from the variable.
+      cli.out.length = 0;
+      assert.equal(await run(["logincheck", "--compact"], { ...cli.deps, env: { DESTATIS_USERNAME: USERNAME, DESTATIS_PASSWORD: password } }), 0);
+      assert.ok(!cli.out.join("\n").includes("word123"), cli.out.join("\n"));
+    } finally {
+      cli.cleanup();
+    }
+  }
+});
