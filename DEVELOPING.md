@@ -530,7 +530,8 @@ read it; a usage error of `config`, such as a refused name or value, stays `cli`
 still exit 2; and a stdout write error). Code logs through `logOf(deps)` and never writes diagnostics with
 `io.err` directly. `run()` builds the logger from argv before commander parses it
 (`logFormatFromArgv`, used only for the records of a parse error: the first
-`--log-format`, the value of an option that takes one skipped; a `preAction` hook then
+`--log-format`, the value of one of the program's own value options skipped; a
+`preAction` hook then
 sets the format commander parsed, so `--user-agent --log-format=jsonl` logs text), so
 commander's own usage errors are records too (after `withoutStrayValues` has dropped a
 stray value from them): its `error: …` an ERROR of `cli` (a `(Did you mean …?)` line

@@ -740,6 +740,14 @@ test("a parse error is logged in the format commander would have parsed: the fir
   assert.match(record["msg"] as string, /--log-format <format>' was given more than once/);
 });
 
+test("a subcommand's value option does not swallow the program's --log-format, in a parse error too (L6)", async () => {
+  // commander takes the program's --log-format out of argv first; --start-year is left without its value.
+  const cli = makeCli(() => jsonResponse(fx.findResult));
+  assert.equal(await run(["data", "table", "12411-0001", "--start-year", "--log-format", "jsonl"], cli.deps), 2);
+  assert.ok(cli.err.length > 0 && cli.err.every((line) => line.startsWith("{")), cli.err.join("\n"));
+  assert.match((JSON.parse(cli.err[0] ?? "") as Record<string, unknown>)["msg"] as string, /--start-year <year>' argument missing/);
+});
+
 test("every -o failure is an ERROR record of destatis.output, exit 2 as before (L8)", async () => {
   const failures: Array<(cli: ReturnType<typeof makeCli>) => void> = [
     (cli) => cli.files.set("out.json", Buffer.from("existing")), // an existing file, no --force
