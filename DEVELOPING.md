@@ -542,6 +542,8 @@ log record: the no-echo prompt of `destatis config set` (`readSecretFrom`, strai
 `process.stderr`). Outside `run()`, the bin shim logs through `processLogger(argv)` (the
 format argv asks for, the run's redaction): a stdout write error other than a closed
 pipe is an ERROR record of `destatis.output` (`Could not write to stdout: …`,
-`handleOutputErrors`, exit 1), and a rejection of `run()` itself an ERROR record of
-`destatis.cli` (`Unexpected error: …`). Conformance test P23 checks all of this, and its body is
+`handleOutputErrors`, exit 1), a rejection of `run()` itself an ERROR record of
+`destatis.cli` (`Unexpected error: …`), and Node's own process warnings
+(`NODE_TLS_REJECT_UNAUTHORIZED=0`) WARN records of `destatis.cli`: `installWarningLog`
+removes Node's default `warning` listener and logs `(node) <name>: <message>`. Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.
