@@ -246,8 +246,10 @@ login, half a pair; reworded naming `the stored token` etc.), a stored value the
 library would refuse is a `DestatisError` (exit 1) naming the credential, and every
 value read is handed to `CliDeps.redact` (set by `run()`'s `withRedactedOutput`) so a
 server echo of it prints `***`. `config set` reads through `CliIO.readSecret`
-(`readSecretFrom`: raw mode without echo on a terminal, the whole input from a pipe),
-never from argv; it drops trailing line breaks only and applies the store's rule
+(`readSecretFrom`: raw mode without echo on a terminal, the whole input from a pipe,
+at most 64 KiB either way), never from argv. On a terminal it drops escape sequences
+(arrow keys, bracketed-paste markers), keeps every other character and refuses a paste
+with more after its first line break. It drops trailing line breaks only and applies the store's rule
 (`credentialValueProblem`: not blank, no line break or other control character —
 spaces and tabs inside are allowed, since a password may hold them) plus the library's
 `credentialProblem`.
