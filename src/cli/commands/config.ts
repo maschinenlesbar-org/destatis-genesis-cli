@@ -4,7 +4,6 @@
 // nor `ps`; it comes out masked unless asked for in full.
 
 import type { Command } from "commander";
-import { InvalidArgumentError } from "commander";
 import { DestatisError, DestatisUsageError } from "../../client/errors.js";
 import { credentialProblem } from "../../client/validate.js";
 import { CONFIG_DIR_NAME, credentialValueProblem, maskCredential, type CredentialStore } from "../credentials.js";
@@ -17,12 +16,20 @@ import type { GlobalOptions } from "../shared.js";
  */
 export const CREDENTIAL_NAMES = ["token", "username", "password"] as const;
 
-/** commander value-parser: a credential this program knows. */
-function parseCredentialName(value: string): string {
-  if (!(CREDENTIAL_NAMES as readonly string[]).includes(value)) {
-    throw new InvalidArgumentError(`Not a credential: expected ${CREDENTIAL_NAMES.join(", ")}.`);
+/**
+ * The credential name a config command was given, checked in the action rather than by
+ * a commander argument parser: commander repeats a rejected argument (`argument
+ * 'Hunter2…' is invalid`) and every surplus one (`too many arguments … got 2: …`), and
+ * a password typed in place of the name would end up in the log. The usage errors here
+ * name the valid names, never what was typed.
+ */
+function credentialNameArg(command: Command, usage: string): string {
+  const [name, ...rest] = command.args;
+  if (rest.length > 0) throw new DestatisUsageError(`${usage} takes one name: ${CREDENTIAL_NAMES.join(", ")}.`);
+  if (name === undefined || !(CREDENTIAL_NAMES as readonly string[]).includes(name)) {
+    throw new DestatisUsageError(`Not a credential name this program knows: expected ${CREDENTIAL_NAMES.join(", ")}.`);
   }
-  return value;
+  return name;
 }
 
 /**
@@ -62,16 +69,17 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
     .description(
       "store a credential: typed at a prompt without echo, or piped in (pass show genesis | destatis config set password) — never given as an argument",
     )
-    .argument("<name>", names, parseCredentialName)
+    .argument("<name>", names)
     // Commander's own "too many arguments" error repeats them — here, the secret.
     .allowExcessArguments(true)
-    .action(async (name: string, _options: unknown, command: Command) => {
+    .action(async (_name: string, _options: unknown, command: Command) => {
       if (command.args.length > 1) {
         throw new DestatisUsageError(
           "destatis config set takes the name only: the value is read from a prompt or from stdin, never from the command line. " +
             "The one given is now in your shell history; if it is a secret, replace it there.",
         );
       }
+      const name = credentialNameArg(command, "destatis config set");
       if (deps.io.readSecret === undefined) {
         throw new DestatisUsageError("No way to read a secret here: pipe it in, or run destatis config set on a terminal.");
       }
@@ -88,9 +96,11 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
   config
     .command("get")
     .description("show a stored credential, masked (abcd…wxyz; **** for a password and below 20 characters) unless --reveal")
-    .argument("<name>", names, parseCredentialName)
+    .argument("<name>", names)
+    .allowExcessArguments(true)
     .option("--reveal", "print the whole value, for a script that passes it on — it then is on your screen or in its log")
-    .action(async (name: string, options: { reveal?: boolean }) => {
+    .action(async (_name: string, options: { reveal?: boolean }, command: Command) => {
+      const name = credentialNameArg(command, "destatis config get");
       const store = storeOf(deps);
       const value = store.get(name);
       if (value === undefined) throw new DestatisError(`No ${name} is stored in ${store.path}; destatis config set ${name} stores one.`);
@@ -100,8 +110,10 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
   config
     .command("unset")
     .description("remove a stored credential")
-    .argument("<name>", names, parseCredentialName)
-    .action(async (name: string) => {
+    .argument("<name>", names)
+    .allowExcessArguments(true)
+    .action(async (_name: string, _options: unknown, command: Command) => {
+      const name = credentialNameArg(command, "destatis config unset");
       const store = storeOf(deps);
       if (!store.unset(name)) throw new DestatisError(`No ${name} is stored in ${store.path}.`);
       logOf(deps).info("config", `Removed ${name} from ${store.path}.`);
@@ -110,7 +122,9 @@ export function registerConfigCommands(program: Command, deps: CliDeps): void {
   config
     .command("list")
     .description("every stored credential, masked, and where the file is")
-    .action(async () => {
+    .allowExcessArguments(true)
+    .action(async (_options: unknown, command: Command) => {
+      if (command.args.length > 0) throw new DestatisUsageError("destatis config list takes no arguments.");
       const store = storeOf(deps);
       const all = store.all();
       for (const name of Object.keys(all).sort()) deps.io.out(`${name}  ${maskCredential(all[name] as string, name)}`);
