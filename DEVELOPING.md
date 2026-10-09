@@ -416,7 +416,13 @@ for every transport (P5):
   `Retry-After` (delay-seconds or an IMF-fixdate) when that is longer — never sooner,
   so `Retry-After: 0` or a past date can't make a burst (P6). A malformed one falls
   back to the backoff; one above 30 s is not retried, and the error says how long the
-  server asked to wait. Note
+  server asked to wait. Each retry is announced: the engine option
+  `onRetry(event: RetryEvent)` (exported type: `{ retry` (1-based), `maxRetries`, `delayMs`,
+  `status?`, `url` (userinfo redacted) `}`) is called once per retry right before the
+  sleep, never when there is none, and a throw in it is swallowed. The CLI sets it to log
+  one `WARN` record of `destatis.http`, `HTTP 503 from <host>: retry 1 of 3 in 2 s`
+  (`retryMessage` in `shared.ts`; host only, whole seconds, ms under 1 s). Tests:
+  `test/engine.test.ts`, `test/retry-log.test.ts`. Note
   GENESIS rate-limits on *concurrency* (~3 parallel) and does not reliably emit
   `429`/`503`, so this path is largely inert — keep it, don't rely on it.
 - **`--base-url`** accepts only `http:`/`https:`. Pointing it at the sibling

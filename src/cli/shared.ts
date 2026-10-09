@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { OutputError, logOf, type CliDeps } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
-import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse } from "../client/engine.js";
+import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse, type RetryEvent } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
 import { DestatisError, DestatisUsageError, DestatisValidationError, cutForMessage } from "../client/errors.js";
 import {
@@ -287,12 +287,26 @@ function holdsStoredLogin(deps: CliDeps): boolean {
  * login, a half pair, no access mode, guest with credentials) with the flags and
  * env vars — naming where each credential came from, never its value.
  */
+/** `HTTP 503 from host: retry 1 of 3 in 2 s` (host only; whole seconds, ms under 1 s). */
+export function retryMessage(event: RetryEvent): string {
+  let host: string;
+  try {
+    host = new URL(event.url).host;
+  } catch {
+    host = "the server";
+  }
+  const why = event.status === undefined ? "connection reset" : `HTTP ${event.status}`;
+  const wait = event.delayMs < 1000 ? `${event.delayMs} ms` : `${Math.round(event.delayMs / 1000)} s`;
+  return `${why} from ${host}: retry ${event.retry} of ${event.maxRetries} in ${wait}`;
+}
+
 function createClient(
   deps: CliDeps,
   options: DestatisClientOptions,
   setBy: readonly string[] = [],
   fromFile = false,
 ): ReturnType<CliDeps["createClient"]> {
+  options.onRetry = (event) => logOf(deps).warn("http", retryMessage(event));
   try {
     return deps.createClient(options);
   } catch (err) {
@@ -594,7 +608,7 @@ export function action(
     // A command that sends no credentials (`hello`) neither reads nor checks them, so
     // a malformed or half-set variable can't stop it. It always runs as guest.
     if (options.credentials === false) {
-      const client = deps.createClient({ ...toClientOptions(global, { present: false }), guest: true });
+      const client = createClient(deps, { ...toClientOptions(global, { present: false }), guest: true });
       warnArgvCredentials(deps, command);
       warnCleartext(deps, global, { present: false });
       await fn({ client, global, opts: command.opts() }, positionals);

@@ -48,7 +48,7 @@ error (exit 2), not "the last one wins".
 | `--base-url <url>` | API base (default `https://genesis.destatis.de`); `http(s)` only, a path prefix is fine, but no query, fragment, userinfo, whitespace or control characters. A remote `http:` URL logs `… WARN  [destatis.http] … sent unencrypted to <host> (http:, not https:)` on stderr once per run, naming `the token` or `the login` when one is sent (never its value); loopback hosts don't warn |
 | `--language <de\|en>` | response language (not sent unless given; the server default is `de`; English data labels are partial) |
 | `--pagelength <n>` | max list results, `1..25000` (server default 100) |
-| `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`) |
+| `--timeout <ms>` · `--max-retries <n>` · `--max-response-bytes <n>` | transport tuning (`--timeout` at most `2147483647`); each retry of a `429`/`503` logs one WARN record of `destatis.http` before it waits |
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
 | `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [destatis.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
@@ -219,7 +219,7 @@ A reader that stops early (`destatis find … | head`) ends the run quietly with
   or raise `--timeout`. Note that only `429`/`503` are auto-retried (`--max-retries`,
   each after a linear backoff of 200 ms × attempt, or the server's `Retry-After` when
   that is longer, up to 30 s — a longer one is not retried, and the error names the
-  requested wait), **not** `500`, resets or timeouts. Where the server includes a message, the CLI now
+  requested wait; each retry logs one WARN record of `destatis.http` before it waits, e.g. `HTTP 503 from host: retry 1 of 3 in 2 s`), **not** `500`, resets or timeouts. Where the server includes a message, the CLI now
   surfaces it in the error text.
 - **`"boolean"`/count fields are strings.** List items encode e.g. `Values` /
   `Cubes` counts and flags as JSON strings (`"9"`, `"true"`).

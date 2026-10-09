@@ -641,3 +641,73 @@ test("a download's Content-Type is quoted cut in the library's own messages (#18
   const e = new RequestEngine({ transport: async () => ({ status: 200, headers: { "content-type": type }, body: Buffer.from("<html>login</html>") }) });
   await assert.rejects(e.postRaw("/data/tablefile", "application/zip", {}, { username: "TOK" }), (err: Error) => err.message.length < 1000 && /Content-Type text\/html; x=y+…\)/.test(err.message));
 });
+
+test("onRetry is called once per retry, with the event fields, right before the sleep", async () => {
+  const log: string[] = [];
+  const events: unknown[] = [];
+  let n = 0;
+  const mt = makeMockTransport(() =>
+    n++ < 2
+      ? { status: 503, headers: n === 1 ? { "retry-after": "2" } : {}, body: Buffer.from("{}") }
+      : jsonResponse({ ok: 1 }),
+  );
+  const e = new RequestEngine({
+    transport: mt.transport,
+    baseUrl: "https://example.test",
+    maxRetries: 3,
+    sleep: async (ms) => void log.push(`sleep ${ms}`),
+    onRetry: (ev) => {
+      events.push(ev);
+      log.push("retry");
+    },
+  });
+  await e.getJson("/x", "unchecked");
+  assert.deepEqual(log, ["retry", "sleep 2000", "retry", "sleep 400"]);
+  assert.deepEqual(events, [
+    { retry: 1, maxRetries: 3, delayMs: 2000, status: 503, url: "https://example.test/x" },
+    { retry: 2, maxRetries: 3, delayMs: 400, status: 503, url: "https://example.test/x" },
+  ]);
+});
+
+test("onRetry is never called without a retry, and a throw in it is swallowed", async () => {
+  const events: unknown[] = [];
+  const onRetry = (ev: unknown) => void events.push(ev);
+  const ok = new RequestEngine({ transport: makeMockTransport(() => jsonResponse({})).transport, sleep: async () => {}, onRetry });
+  await ok.getJson("/x", "unchecked");
+  const notFound = new RequestEngine({
+    transport: makeMockTransport(() => jsonResponse({ detail: "no" }, 404)).transport,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(notFound.getJson("/x", "unchecked"), DestatisApiError);
+  // retries exhausted: the last 503 is an error, not a retry
+  const down = new RequestEngine({
+    transport: makeMockTransport(() => ({ status: 503, headers: {}, body: Buffer.from("{}") })).transport,
+    maxRetries: 1,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(down.getJson("/x", "unchecked"), DestatisApiError);
+  assert.equal(events.length, 1);
+  // a Retry-After over the cap is not retried
+  const long = new RequestEngine({
+    transport: makeMockTransport(() => ({ status: 503, headers: { "retry-after": "999999" }, body: Buffer.from("{}") })).transport,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(long.getJson("/x", "unchecked"), DestatisApiError);
+  assert.equal(events.length, 1);
+  let n = 0;
+  const throwing = new RequestEngine({
+    transport: makeMockTransport(() => (n++ === 0 ? { status: 503, headers: {}, body: Buffer.from("{}") } : jsonResponse({ ok: 1 }))).transport,
+    sleep: async () => {},
+    onRetry: () => {
+      throw new Error("boom");
+    },
+  });
+  await throwing.getJson("/x", "unchecked");
+});
+
+test("onRetry must be a function", () => {
+  assert.throws(() => new RequestEngine({ onRetry: 5 as never }), DestatisValidationError);
+});

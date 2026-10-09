@@ -108,6 +108,6 @@ Bereiche: `cli` (Bedienfehler, Meldungen von commander, unerwartete Fehler, die 
 vor Zugangsdaten in einer Option), `api` (die Antworten von GENESIS: ein Fehlerstatus, der
 Hinweis zu den Zugangsdaten und eine fehlerhafte Antwort — ungültiges JSON, die falsche
 Form, ein leerer Body, eine Anmeldeprüfung, die nichts bestätigt), `http` (die Verbindung,
-die Klartext-Warnung), `config` (die Zugangsdaten-Datei) und `output` (die `-o`-Datei,
+die Klartext-Warnung und je Wiederholung eine WARN-Zeile vor dem Warten), `config` (die Zugangsdaten-Datei) und `output` (die `-o`-Datei,
 Schreibfehler auf stdout). Ein Eintrag ist immer eine Zeile; Steuerzeichen darin werden
 maskiert.
