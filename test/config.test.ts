@@ -668,7 +668,7 @@ test("every stored value is a secret of the run the moment it is read: no record
   }
 });
 
-test("a credential a server echoes URL-encoded on a success is replaced on stdout too, as the library does in errors (03-2)", async () => {
+test("a credential a server echoes URL-encoded is replaced in a record; inside text on stdout it is data and stays (03-2, 03-1)", async () => {
   const password = "s3cret+p@ss/w%rd";
   const note = `login=${encodeURIComponent("DEUSER0001")}&pw=${encodeURIComponent(password)}`;
   const cli = makeCli({ responder: () => jsonResponse({ ...fx.loginOk, Username: "DEUSER0001", Note: note }) });
@@ -676,13 +676,22 @@ test("a credential a server echoes URL-encoded on a success is replaced on stdou
     cli.store.set("username", "DEUSER0001");
     cli.store.set("password", password);
     assert.equal(await run(["logincheck", "--compact"], cli.deps), 0, cli.err.join("\n"));
-    assert.ok(!cli.out.join("\n").includes(encodeURIComponent(password)), cli.out.join("\n"));
-    assert.match(cli.out.join("\n"), /"Note":"login=\*\*\*&pw=\*\*\*"/);
-    // The same from the variables.
-    cli.out.length = 0;
-    const viaEnv = { ...cli.deps, env: { DESTATIS_USERNAME: "DEUSER0001", DESTATIS_PASSWORD: password } };
-    assert.equal(await run(["logincheck", "--compact"], viaEnv), 0, cli.err.join("\n"));
-    assert.match(cli.out.join("\n"), /"Note":"login=\*\*\*&pw=\*\*\*"/);
+    // On stdout the note is data: stdout carries what -o would write.
+    assert.ok(cli.out.join("\n").includes(`"Note":"${note}"`), cli.out.join("\n"));
+    // In a record it is replaced, from the file and from the variables alike.
+    const failing = makeCli({ responder: () => ({ status: 500, headers: { "content-type": "text/plain" }, body: Buffer.from(note) }) });
+    try {
+      failing.store.set("username", "DEUSER0001");
+      failing.store.set("password", password);
+      assert.notEqual(await run(["logincheck"], failing.deps), 0);
+      assert.ok(!failing.err.join("\n").includes(encodeURIComponent(password)), failing.err.join("\n"));
+      failing.err.length = 0;
+      const viaEnv = { ...failing.deps, env: { DESTATIS_USERNAME: "DEUSER0001", DESTATIS_PASSWORD: password } };
+      assert.notEqual(await run(["logincheck"], viaEnv), 0);
+      assert.ok(!failing.err.join("\n").includes(encodeURIComponent(password)), failing.err.join("\n"));
+    } finally {
+      failing.cleanup();
+    }
   } finally {
     cli.cleanup();
   }
@@ -739,6 +748,33 @@ test("a failure of the credentials file is an ERROR record of destatis.config, l
     rmSync(cli.store.path);
     const stored = await records(["config", "set", "token"]);
     assert.deepEqual([stored[0]?.["level"], stored[0]?.["topic"]], ["INFO", "destatis.config"]);
+  } finally {
+    cli.cleanup();
+  }
+});
+
+test("on stdout a bare secret is replaced only as a whole value, never inside other text (03-1)", async () => {
+  // A password that is also a year: the data keeps its "Statistik 2023"; an echoed whole value is still hidden.
+  const cli = makeCli({ responder: () => jsonResponse({ ...fx.loginOk, Username: USERNAME, Note: "Statistik 2023", Year: "2023" }) });
+  try {
+    cli.out.length = 0;
+    assert.equal(await run(["logincheck", "--compact"], { ...cli.deps, env: { DESTATIS_USERNAME: USERNAME, DESTATIS_PASSWORD: "2023" } }), 0, cli.err.join("\n"));
+    const out = cli.out.join("\n");
+    assert.match(out, /"Note":"Statistik 2023"/);
+    assert.match(out, /"Username":"\*\*\*"/);
+    assert.match(out, /"Year":"\*\*\*"/);
+    // A token login: the user name in the data is no secret of this run.
+    cli.out.length = 0;
+    assert.equal(await run(["logincheck", "--compact"], { ...cli.deps, env: { DESTATIS_API_TOKEN: TOKEN } }), 0, cli.err.join("\n"));
+    assert.match(cli.out.join("\n"), new RegExp(`"Username":"${USERNAME.replace(".", "\\.")}","Note":"Statistik 2023"`));
+    // A record replaces it anywhere: a server error that echoes the password inside its text.
+    const failing = makeCli({ responder: () => ({ status: 500, headers: { "content-type": "text/plain" }, body: Buffer.from("bad password 2023 for user") }) });
+    try {
+      assert.notEqual(await run(["logincheck"], { ...failing.deps, env: { DESTATIS_USERNAME: USERNAME, DESTATIS_PASSWORD: "2023" } }), 0);
+      assert.ok(!failing.err.join("\n").includes("2023"), failing.err.join("\n"));
+    } finally {
+      failing.cleanup();
+    }
   } finally {
     cli.cleanup();
   }

@@ -53,6 +53,9 @@ malformed variable fails only a command that uses it: `--help`, `--version` and
 No message repeats a credential: the CLI prints `***` in place of the token,
 username and password (from flags, env vars or the credentials file) and of any
 `user:pass@` in a URL, wherever they would appear — a usage error, an unknown command, the server's echo.
+In the data on stdout a credential the server echoes is replaced only as a whole value
+(`"Username": "***"`), never inside other text, so a short password such as `2023`
+cannot change a year in a table; `-o` writes the answer as the server sent it.
 
 > **Prefer the environment variables.** A credential passed as a `--token` /
 > `--username` / `--password` **flag** is visible in the process table (`ps`,
