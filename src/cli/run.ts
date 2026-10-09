@@ -12,6 +12,7 @@ import {
   DestatisApiError,
   DestatisError,
   DestatisNetworkError,
+  DestatisParseError,
   DestatisUsageError,
   DestatisValidationError,
   credentialsIn,
@@ -257,10 +258,14 @@ export function processLogger(argv: readonly string[], env: Record<string, strin
 
 /**
  * The log area of a `DestatisError` that is neither an API error nor a usage error: the
- * connection (`http`), the credentials file (`config`, like its successes), else `cli`.
+ * connection (`http`), a malformed answer (`api`: bad JSON, the wrong shape, an empty
+ * body, an unknown charset, a login check that confirms nothing — the API's answer as
+ * much as an error status is), the credentials file (`config`, like its successes),
+ * else `cli`.
  */
 function areaOf(err: DestatisError): string {
   if (err instanceof DestatisNetworkError) return "http";
+  if (err instanceof DestatisParseError) return "api";
   if (err instanceof CredentialsFileError) return "config";
   return "cli";
 }

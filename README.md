@@ -128,8 +128,8 @@ codes, cubes, `selection` wildcards, `Status.Code` values).
 Errors and diagnostics go to stderr, so piping stdout into `jq` stays clean. Each line
 on stderr is a **log record**: a timestamp (UTC), a level (`ERROR`, `WARN`, `INFO`) and a
 topic, the program and the area it comes from (`destatis.cli` for usage errors and the
-credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers and the
-credentials hint, `destatis.http` for the connection, `destatis.config` for the
+credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers, a
+malformed one included, and the credentials hint, `destatis.http` for the connection, `destatis.config` for the
 credentials file, `destatis.output` for the `-o` file and stdout — each with its
 successes and its failures). By default it is written log4j style; `--log-format jsonl`
 writes one JSON object per line instead. A record is always one line: a line break, a control

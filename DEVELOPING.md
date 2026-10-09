@@ -512,9 +512,11 @@ controls as `\uXXXX`, so no text that reaches a record, by whatever path, can sp
 forge another one or steer the terminal. Before that a lone surrogate (half a
 character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`),
 and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
-code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
-reply that does not parse, the warning about a credential given as a flag), `api`
-(GENESIS's error answers and the credentials hints after them), `http` (the connection,
+code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, the
+warning about a credential given as a flag), `api` (GENESIS's answers: its error
+answers and the credentials hints after them, and a malformed answer, a
+`DestatisParseError`: bad JSON, the wrong shape, an empty body, a login check that
+confirms nothing), `http` (the connection,
 the cleartext warning), `config` (the credentials file: what `destatis config
 set|unset|list` did, and every failure to read, write or use the file — a
 `CredentialsFileError`, exit 1 — whether `config` or a command that needs the login

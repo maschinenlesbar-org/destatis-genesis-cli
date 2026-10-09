@@ -98,3 +98,16 @@ sinnvolle Aussage möglich), `()` (eingeschränkter Aussagewert), `p` (vorläufi
 
 Wie Zugangsdaten übertragen werden und warum Weiterleitungen nicht gefolgt wird, beschreibt
 [DEVELOPING.md](DEVELOPING.md) (englisch).
+
+## Log-Einträge
+
+**Log-Eintrag (log record).** Jede Diagnosezeile, die die CLI nach stderr schreibt: ein
+Zeitstempel, eine Stufe (`ERROR`, `WARN`, `INFO`) und ein Thema `destatis.<Bereich>`, als
+Text (im Stil von log4j) oder mit `--log-format jsonl` als ein JSON-Objekt pro Zeile. Die
+Bereiche: `cli` (Bedienfehler, Meldungen von commander, unerwartete Fehler, die Warnung
+vor Zugangsdaten in einer Option), `api` (die Antworten von GENESIS: ein Fehlerstatus, der
+Hinweis zu den Zugangsdaten und eine fehlerhafte Antwort — ungültiges JSON, die falsche
+Form, ein leerer Body, eine Anmeldeprüfung, die nichts bestätigt), `http` (die Verbindung,
+die Klartext-Warnung), `config` (die Zugangsdaten-Datei) und `output` (die `-o`-Datei,
+Schreibfehler auf stdout). Ein Eintrag ist immer eine Zeile; Steuerzeichen darin werden
+maskiert.
