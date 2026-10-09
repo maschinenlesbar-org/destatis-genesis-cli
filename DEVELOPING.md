@@ -545,5 +545,8 @@ pipe is an ERROR record of `destatis.output` (`Could not write to stdout: …`,
 `handleOutputErrors`, exit 1), a rejection of `run()` itself an ERROR record of
 `destatis.cli` (`Unexpected error: …`), and Node's own process warnings
 (`NODE_TLS_REJECT_UNAUTHORIZED=0`) WARN records of `destatis.cli`: `installWarningLog`
-removes Node's default `warning` listener and logs `(node) <name>: <message>`. Conformance test P23 checks all of this, and its body is
+removes Node's default `warning` listener and logs `(node) <name>: <message>`.
+In `defaultDeps` a record waits for stdout (`stderrAfterStdout`): it is held while stdout
+has a backlog and written, in order, once it is gone, so with `2>&1 |` and a slow reader
+it never lands inside the data. Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.
