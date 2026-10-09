@@ -519,7 +519,11 @@ the cleartext warning), `config` (`destatis config set|unset|list`) and `output`
 (`Wrote N bytes …`). Code logs through `logOf(deps)` and never writes diagnostics with
 `io.err` directly. `run()` builds the logger from argv before commander parses it, so
 commander's own usage errors are records too (after `withoutStrayValues` has dropped a
-stray value from them), and with the run's redaction (`withRedactedOutput`), which
+stray value from them): its `error: …` an ERROR of `cli` (a `(Did you mean …?)` line
+joined to it), the help it shows after one an INFO record per line, and a command group
+run without its subcommand (or the program without a command) an ERROR "missing
+command: `destatis catalogue <subcommand>`" before that help, so every failed run has an
+ERROR record (`writeCommanderErr`). The log is built with the run's redaction (`withRedactedOutput`), which
 replaces a secret in the message only, before it is escaped: the frame is never touched,
 and a secret is kept out of the log in either format — including a credential read from
 the credentials file, which `action()` hands to `CliDeps.redact`. `CliDeps.now`
