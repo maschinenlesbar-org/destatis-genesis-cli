@@ -8,7 +8,7 @@ import { OutputError, logOf, type CliDeps } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
 import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse } from "../client/engine.js";
 import type { DestatisClientOptions } from "../client/client.js";
-import { DestatisError, DestatisUsageError, DestatisValidationError } from "../client/errors.js";
+import { DestatisError, DestatisUsageError, DestatisValidationError, cutForMessage } from "../client/errors.js";
 import {
   BASE_URL_USERINFO_PROBLEM,
   GUEST_WITH_CREDENTIALS_PROBLEM,
@@ -427,7 +427,8 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
  * Content-Type so the user can tell what the bytes actually are (e.g. a ZIP).
  */
 export function renderRaw(deps: CliDeps, global: GlobalOptions, response: RawResponse): void {
-  const typeNote = response.contentType ? ` (Content-Type: ${response.contentType})` : "";
+  // Server text: sanitised by the engine, and cut here like every quoted value.
+  const typeNote = response.contentType ? ` (Content-Type: ${cutForMessage(response.contentType)})` : "";
   if (toFile(global)) {
     writeOutputFile(deps, global, global.output, response.data);
     logOf(deps).info("output", `Wrote ${response.data.length} bytes to ${global.output}${typeNote}`);

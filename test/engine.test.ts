@@ -635,3 +635,9 @@ test("own messages quote a server value at most MAX_MESSAGE_VALUE_LENGTH charact
   const charset = new RequestEngine({ transport: async () => ({ status: 200, headers: { "content-type": `application/json; charset=${long}` }, body: Buffer.from("{}") }) });
   await assert.rejects(charset.postJson("/find/find", {}, {}), (err: Error) => err.message.length < 1200 && /charset "x+…"/.test(err.message));
 });
+
+test("a download's Content-Type is quoted cut in the library's own messages (#18)", async () => {
+  const type = `text/html; x=${"y".repeat(5000)}`;
+  const e = new RequestEngine({ transport: async () => ({ status: 200, headers: { "content-type": type }, body: Buffer.from("<html>login</html>") }) });
+  await assert.rejects(e.postRaw("/data/tablefile", "application/zip", {}, { username: "TOK" }), (err: Error) => err.message.length < 1000 && /Content-Type text\/html; x=y+…\)/.test(err.message));
+});

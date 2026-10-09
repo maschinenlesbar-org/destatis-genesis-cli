@@ -762,3 +762,13 @@ test("every -o failure is an ERROR record of destatis.output, exit 2 as before (
     assert.doesNotMatch(cli.err.join("\n"), /Unexpected error|ERROR \[destatis\.cli\]/);
   }
 });
+
+test("the Content-Type a download is logged with is quoted cut, its control characters gone (#18)", async () => {
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
+  const type = `application/zip; x=${"y".repeat(10_000)}\u009b31m`;
+  const cli = makeCli(() => rawResponse(zip, type), { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" });
+  assert.equal(await run(["data", "tablefile", "12411-0001", "-o", "t.zip"], cli.deps), 0, cli.err.join("\n"));
+  const record = cli.err.find((line) => line.includes("Wrote ")) ?? "";
+  assert.match(record, /Wrote 8 bytes to t\.zip \(Content-Type: application\/zip; x=y+…\)$/);
+  assert.ok(record.length < 700, `${record.length}`);
+});
