@@ -1,15 +1,54 @@
 # Developing `destatis-genesis-cli`
 
 This repo follows the shared `*-cli` two-layer blueprint (a typed,
-dependency-free client + a commander CLI, both driven through injectable seams).
+dependency-free client, `packages/client`, + a commander CLI, `apps/cli`, both driven
+through injectable seams).
 This document records what is **specific** to the DESTATIS GENESIS-Online API —
 read it alongside [GLOSSARY.md](GLOSSARY.md).
 
 ## Layout
 
+The repository is an **npm workspace** with two folders: `apps/` holds the programs it
+publishes, `packages/` the libraries they are built from.
+
 ```
-src/
-  client/        # typed API client, usable as a library independent of the CLI
+package.json         # private workspace manifest: no version, never packed
+apps/cli/            # @maschinenlesbar.org/destatis-genesis-cli — the published package
+  package.json       # its version, bin, files, bundleDependencies
+  src/index.ts       # library entry: re-exports @maschinenlesbar.org/destatis-genesis-client
+  src/cli/           # the CLI (below)
+  test/              # CLI tests and every conformance-*.test.ts
+packages/client/     # @maschinenlesbar.org/destatis-genesis-client — private, bundled into the CLI
+  src/               # the API client (below)
+  test/              # tests that only touch the client, + the transport helpers and fixtures
+tools/pack/          # prepack/postpack: bundle the client and commander into the tarball
+tools/bump.mjs       # version bump + commit + tag (npm run bump)
+tsconfig.docs.json   # TypeDoc only: the package entry, with the client read from its sources
+```
+
+- **The client is its own package** so a later MCP app can share it with the CLI. It is
+  never published on its own: `apps/cli`'s `prepack` copies it (and commander) into the
+  app's `node_modules`, and `bundleDependencies` ships it inside the tarball. The library
+  entry re-exports the client's `"."`, so `import { DestatisClient } from
+  "@maschinenlesbar.org/destatis-genesis-cli"` is unchanged.
+- **The client's exports:** `"."` is the public library surface (`src/index.ts`);
+  `"./internal/*"` maps to any module (`…/destatis-genesis-client/internal/engine`) for
+  what the CLI needs beyond that; `"./test/*"` reaches the client's test helpers and
+  fixtures from the CLI's tests (not bundled). Only `"."` is part of the library.
+- **Dependencies point one way:** the app depends on the client, the client on nothing
+  in the workspace. The login rules (token or username/password, guest access) are the
+  client's; the `config` command and the credentials file are the CLI's.
+- **The version lives in `apps/cli/package.json`.** The root has none; a plain
+  `npm version` at the root is refused. Release with `npm run bump -- <patch|minor|major>`,
+  which bumps the app, commits (the bare version as the message) and tags `vX.Y.Z`.
+- **TypeScript:** `tsconfig.base.json` holds the compiler options; every workspace has a
+  `tsconfig.json` (`src/`) and a `tsconfig.test.json` (`test/`), and the root
+  `tsconfig.json`/`tsconfig.test.json` reference them, built with `tsc -b`.
+
+The client (`packages/client/src/`) and the CLI (`apps/cli/src/`):
+
+```
+packages/client/src/
     types.ts     # GENESIS envelope + catalogue/find list items (opaque data/metadata Objects)
     params.ts    # per-endpoint parameter interfaces
     validate.ts  # input rules (…Problem functions) + assertValid
@@ -18,8 +57,8 @@ src/
     engine.ts    # URL building, retry, Status.Code logical-error mapping, URL redaction
     errors.ts    # Destatis{Error,ApiError,NetworkError,UsageError,ValidationError,ParseError}
     client.ts    # DestatisClient — helloworld/find + catalogue/metadata/data groups
-    index.ts
-  cli/
+    index.ts     # the client's public surface (the library entry re-exports it)
+apps/cli/src/cli/
     io.ts        # injectable I/O + env seam (CliDeps / CliIO), readSecretFrom, the logger and the clock
     log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     credentials.ts # CredentialStore — the credentials file behind `destatis config`
@@ -28,7 +67,6 @@ src/
     program.ts   # assembles the commander program; seeds credential flags from env (unchecked)
     run.ts       # argv -> exit code (no process.exit; testable)
     index.ts     # #! bin shim
-  index.ts       # library entry
 ```
 
 Two seams keep everything testable in-process: **`Transport`** (the only HTTP
@@ -37,17 +75,26 @@ seam; tests inject a mock) and **`CliDeps`** (client factory + I/O + `env`).
 
 ```bash
 npm install
-npm run build       # tsc -> dist/
-npm run typecheck
-npm test            # pretest builds, then node --test --test-timeout=5000 dist/test/*.test.js
-npm start -- --help # run the built CLI
+npm run build       # compiles every workspace (tsc -b) to its dist/
+npm run typecheck   # tsc -b over every workspace, as build
+npm test            # pretest builds, then `node --test` over each workspace's dist/test
+npm run coverage    # the same tests in one run, with a coverage report
+npm start -- --help # run the CLI from the build (node apps/cli/dist/src/cli/index.js)
+npm run bump -- <patch|minor|major>  # bump apps/cli, commit, tag vX.Y.Z
+node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 ```
+
+CI (`ci.yml`) type-checks, builds and tests on Node 22/24, then packs the real tarball,
+checks the pack left nothing behind, installs it globally with the registry out of reach and
+runs the bin. `release.yml` (on a `v*` tag, made by `npm run bump`) verifies the tag against
+`apps/cli/package.json`, writes the SBOMs (scoped to the `apps/cli` workspace) and runs
+`npm pack --workspace apps/cli`; `publish.yml` runs `npm publish --workspace apps/cli`.
 
 ## Library input validation
 
 The library owns every rule about what a request may contain; the CLI only turns
 argv strings into typed values and calls the same rules. The rules are pure,
-exported `…Problem(value)` functions in `src/client/validate.ts` (they return the
+exported `…Problem(value)` functions in `packages/client/src/validate.ts` (they return the
 reason a value is invalid, or `undefined`). The client enforces them before any
 request through `assertValid(name, value, problem)`, which throws
 **`DestatisValidationError`** (`Invalid <name>: <reason>`); a client method
@@ -248,9 +295,9 @@ username/password is rejected by the library (see below) and reworded by the CLI
 with the flags (exit 2), naming the half that was set and where (`Set: DESTATIS_USERNAME
 only.`) and, when the credentials file holds a login, that it was set aside.
 
-The **credentials file** is the CLI's, not the library's: `src/cli/credentials.ts`
+The **credentials file** is the CLI's, not the library's: `apps/cli/src/cli/credentials.ts`
 (`CredentialStore`, the same mechanism as openka-cli's `ka config`) and `destatis
-config` (`src/cli/commands/config.ts`; names `token`, `username`, `password`). It
+config` (`apps/cli/src/cli/commands/config.ts`; names `token`, `username`, `password`). It
 reaches the CLI through `CliDeps.credentials`, which only `defaultDeps` sets, so a test
 that does not ask for one never reads the user's file. `action()` (`shared.ts`,
 `storedCredentials`) reads it only when the flags and variables give no credential at
@@ -422,7 +469,7 @@ for every transport (P5):
   sleep, never when there is none, and a throw in it is swallowed. The CLI sets it to log
   one `WARN` record of `destatis.http`, `HTTP 503 from <host>: retry 1 of 3 in 2 s`
   (`retryMessage` in `shared.ts`; host only, whole seconds, ms under 1 s). Tests:
-  `test/engine.test.ts`, `test/retry-log.test.ts`. Note
+  `packages/client/test/engine.test.ts`, `apps/cli/test/retry-log.test.ts`. Note
   GENESIS rate-limits on *concurrency* (~3 parallel) and does not reliably emit
   `429`/`503`, so this path is largely inert — keep it, don't rely on it.
 - **`--base-url`** accepts only `http:`/`https:`. Pointing it at the sibling
@@ -441,15 +488,20 @@ for every transport (P5):
 
 `node --test` on the compiled output; no jest/vitest. Node 22.12 or later
 (`engines`); CI (`ci.yml`) type-checks, builds and tests on Node 22/24. Tests inject a mock
-`Transport` and a mocked `CliDeps` (`test/helpers.ts`, `test/fixtures.ts`). The
+`Transport` and a mocked `CliDeps`. The client's tests are in `packages/client/test/`
+(`query`, `http`, `engine`, `client`, `redirect-credentials`), with the transport helpers
+and the fixtures (`helpers.ts`, `fixtures.ts`); everything that drives the CLI, the
+credentials file (`config.test.ts`, temporary directories, never the real home) included,
+is in `apps/cli/test/`, and `apps/cli/test/helpers.ts` re-exports the client's helpers
+next to the CLI's own (`untimed`, `parity`). The
 GENESIS-specific behaviour under test: `Status.Code` mapping (`engine.test.ts`),
 credential injection + the one-login rule (`client.test.ts`), the credential guard
 / exit codes / env seeding (`cli.test.ts`).
 
-`test/log.test.ts` tests the record helpers of `src/cli/log.ts` on their own
+`apps/cli/test/log.test.ts` tests the record helpers of `apps/cli/src/cli/log.ts` on their own
 (`escapeForRecord`, `formatLogRecord`); the CLI-level checks are P23's.
 
-Conformance tests (`test/conformance-p*.test.ts`, shared across the `*-cli` repos;
+Conformance tests (`apps/cli/test/conformance-p*.test.ts`, shared across the `*-cli` repos;
 only their adapter block differs): P1 CLI redaction, P2 library redaction, P4/P19
 configuration validation, P5 transport contract, P6 retry policy, P7 pipes and exit
 codes, P8/P9/P13 responses and errors, P18 GENESIS access check, P20 the
@@ -499,7 +551,9 @@ TypeDoc API reference under `/api/`. Its content comes from this repository: the
 and quick start, the command tree of the built CLI (`site/scripts/cli-reference.mjs`),
 `Usage.md`, `GLOSSARY.md` and its German version `GLOSSARY.de.md`, the skills, and the skill
 examples in `EXAMPLE.md` and `EXAMPLE.de.md`. The only repo-specific files are
-`site/_config.yml` and `site/_data/project.yml` (the German intro and the access requirements);
+`site/_config.yml` (which also says where the published manifest and the built program
+are: `manifest: apps/cli/package.json`, `program: apps/cli/dist/src/cli/program.js`) and
+`site/_data/project.yml` (the German intro and the access requirements);
 the rest of `site/` is identical in every maschinenlesbar.org CLI, so change it in all of them
 together. When the README intro changes, update the German intro in `site/_data/project.yml`.
 
@@ -511,7 +565,7 @@ npm run serve                        # http://127.0.0.1:4000/destatis-genesis-cl
 
 ## The log on stderr
 
-Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp, a level
+Every diagnostic line on stderr is a log record (`apps/cli/src/cli/log.ts`): a timestamp, a level
 (`ERROR`, `WARN`, `INFO`) and a topic, `destatis.<area>`. `--log-format text` (the default)
 writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
 `--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
