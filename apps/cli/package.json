@@ -52,7 +52,7 @@
   "bugs": {
     "url": "https://github.com/maschinenlesbar-org/destatis-genesis-cli/issues"
   },
-  "homepage": "https://maschinenlesbar-org.github.io/destatis-genesis-cli/",
+  "homepage": "https://maschinenlesbar.org/destatis-genesis-cli/",
   "funding": {
     "type": "github",
     "url": "https://github.com/sponsors/sebs"
