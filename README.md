@@ -125,7 +125,9 @@ destatis data tablefile 12411-0001 --format ffcsv -o pop.zip
 ```
 
 Every command prints the API's JSON envelope (including the `Copyright`
-attribution and a `Status` object). See **[Usage.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/Usage.md)** for the full
+attribution and a `Status` object). `-o <file>` writes it (or a download) to a file instead;
+a value starting with a dash other than `-` (stdout) is refused as the next option, so a file
+whose name starts with a dash is written as `./-name`. See **[Usage.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/Usage.md)** for the full
 command reference and **[GLOSSARY.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/GLOSSARY.md)** for GENESIS concepts (EVAS
 codes, cubes, `selection` wildcards, `Status.Code` values).
 

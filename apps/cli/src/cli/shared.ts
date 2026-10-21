@@ -9,7 +9,7 @@ import { OutputError, OutputTargetError, isDirectoryMessage, logOf, reasonOf, re
 import { CredentialsFileError } from "./credentials.js";
 import { cleartextProblem, DEFAULT_BASE_URL, isBidiControl, type RawResponse, type RetryEvent } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
 import type { DestatisClientOptions } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
-import { DestatisUsageError, DestatisValidationError, cutForMessage } from "@maschinenlesbar.org/destatis-genesis-client/internal/errors";
+import { DestatisUsageError, DestatisValidationError, cutForMessage, quoteValue } from "@maschinenlesbar.org/destatis-genesis-client/internal/errors";
 import {
   BASE_URL_USERINFO_PROBLEM,
   GUEST_WITH_CREDENTIALS_PROBLEM,
@@ -58,6 +58,24 @@ function check<T>(value: T, problem: Problem<T>): T {
 /** commander value-parser: a non-empty (after trimming) string, for a file path (`-o`). */
 export function parseNonEmpty(value: string): string {
   return check(value, nonBlankProblem);
+}
+
+/**
+ * commander value-parser for `-o, --output <file>`: not blank, and `-` is stdout. Any other
+ * dash-leading value is refused as the next option: `destatis hello -o --compact` wrote a
+ * file named "--compact" with exit 0, because commander hands a value option the next argument
+ * whatever it looks like. commander gives the parser the same string for `-o -x` and
+ * `--output=-x`, so a file whose name starts with a dash is written as `./-x`.
+ */
+export function parseOutputPath(value: string): string {
+  parseNonEmpty(value);
+  if (value !== "-" && value.startsWith("-")) {
+    throw new InvalidArgumentError(
+      `looks like a missing value — ${quoteValue(value)} is the next option, consumed because ` +
+        "this one was left without a value. For a file whose name starts with a dash, write ./-name.",
+    );
+  }
+  return value;
 }
 
 /**
