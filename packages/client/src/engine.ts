@@ -827,14 +827,18 @@ export class RequestEngine {
         // A transport's message may quote the request, headers included, so it is
         // scrubbed. The default transport rejects with DestatisNetworkError only; an
         // injected one may throw anything (fetch's TypeError, a string, null). Keep the
-        // library's error contract for both: every failure is a DestatisError. Resets
+        // library's error contract for both: every failure is a DestatisError. A network
+        // error — a reset, a timeout (the engine's deadline too), the size cap, a refused
+        // connection, a DNS failure — is re-raised naming the request, since Node's text
+        // ("connect ECONNREFUSED 127.0.0.1:443") says nothing about which call failed,
+        // with the original as `cause`; one that names it already passes through. Resets
         // are not retried (only 429/503 are, see Usage.md).
         const clean = scrubThrown(cause, ctx);
-        if (clean instanceof DestatisError) throw clean;
+        const prefix = `${method} ${redactUrl(url)} failed: `;
+        if (clean instanceof DestatisError && !(clean instanceof DestatisNetworkError)) throw clean;
+        if (clean instanceof DestatisNetworkError && clean.message.startsWith(prefix)) throw clean;
         const reason = clean instanceof Error ? clean.message : String(clean);
-        throw new DestatisNetworkError(`${method} ${redactUrl(url)} failed: ${sanitizeServerText(reason)}`, {
-          cause: clean,
-        });
+        throw new DestatisNetworkError(`${prefix}${sanitizeServerText(reason)}`, { cause: clean });
       }
 
       const invalid = responseProblem(response);

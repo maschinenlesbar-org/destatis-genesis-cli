@@ -9,6 +9,7 @@ import {
   cutText,
   toWellFormed,
 } from "../src/errors.js";
+import { sizeLimitMessage } from "../src/http.js";
 import { makeMockTransport, jsonResponse, rawResponse, bodyOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -763,4 +764,36 @@ test("K1: an error answer with a big number stays the API error it is", async ()
   const body = '{"Status":{"Code":90,"Content":"nicht gefunden","Type":"Fehler"},"Object":{"n":12345678901234567890}}';
   const e = new RequestEngine({ transport: makeMockTransport(() => rawResponse(body, "application/json")).transport });
   await assert.rejects(e.postJson("/data/table", {}, { username: "TOK" }), (err) => err instanceof DestatisApiError && err.isNotFound);
+});
+
+test("K3: a timeout, the size cap, a refused connection and a DNS failure name the request", async () => {
+  const url = "https://genesis.destatis.de/find/find";
+  // The engine's own deadline.
+  const slow = new RequestEngine({ timeoutMs: 20, transport: () => new Promise(() => {}) });
+  await assert.rejects(slow.postJson("/find/find", {}, {}), (err) => {
+    assert.ok(err instanceof DestatisNetworkError);
+    assert.equal(err.message, `POST ${url} failed: Request timed out after 20ms`);
+    assert.ok(err.cause instanceof DestatisNetworkError);
+    return true;
+  });
+  // What the default transport rejects with: the size cap, ECONNREFUSED, ENOTFOUND.
+  const reasons = [
+    sizeLimitMessage(10),
+    "connect ECONNREFUSED 127.0.0.1:1",
+    "getaddrinfo ENOTFOUND genesis.invalid",
+  ];
+  for (const reason of reasons) {
+    const original = new DestatisNetworkError(reason);
+    const e = new RequestEngine({ transport: () => Promise.reject(original) });
+    await assert.rejects(e.getJson("/find/find"), (err) => {
+      assert.ok(err instanceof DestatisNetworkError, reason);
+      assert.equal(err.message, `GET ${url} failed: ${reason}`);
+      assert.equal(err.cause, original);
+      return true;
+    });
+  }
+  // One that names the request already is left as it is.
+  const named = new DestatisNetworkError(`POST ${url} failed: socket hang up`);
+  const e = new RequestEngine({ transport: () => Promise.reject(named) });
+  await assert.rejects(e.postJson("/find/find", {}, {}), (err) => err === named);
 });
