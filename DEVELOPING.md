@@ -423,7 +423,11 @@ range the number as written is compared with the number as printed
 `1.7976931348623157E308`) prints as the same number and passes; `12345678901234567890`,
 printed `12345678901234567000`, is refused. The table values themselves are strings in the CSV `Content`, never touched; the
 check runs after the status mapping, so an error answer stays the API error it is. A
-`data/*file` download is passed through as bytes, unchecked.
+`data/*file` download is passed through as bytes, unchecked. The check is one linear pass that
+skips strings (`scanNumbers`); it also serves the engine option `bigIntegerKeys` (D3 of the
+2026-10-21 round): a declared member's number is delivered as its exact literal, as a string,
+whatever its size. This client declares none — GENESIS has no 64-bit member, its figures are
+strings in the CSV — so every number keeps the rule above; P25's `BIG_INTEGER_KEYS` is empty.
 
 Auth failures skip the envelope: GENESIS sends a flat `{ Code, Content, Type }`
 body on a non-2xx status. `toApiError` reads it (enveloped or flat, via
