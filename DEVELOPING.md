@@ -108,11 +108,23 @@ into commander's `InvalidArgumentError` (exit 2 too).
 
 What the library rejects:
 
-- **Blank text** (`nonBlankProblem`, `assertRequestParams`): a blank (`""` or
-  whitespace-only) object `name`, `find` `term`, or any given string parameter
-  (`selection`, `area`, `type`, `regionalkey`, `classifyingkey1`, …). GENESIS reads
-  an empty parameter as "no filter", so it would silently return unfiltered data.
-  `undefined` still means "omitted". The CLI's `parseNonEmpty` calls the same rule.
+- **Blank, invisible and half characters** (D8 of the 2026-10-21 round; `assertRequestParams`).
+  Every value that goes into a request passes one rule for its kind, and the CLI's parser for
+  it calls the same rule:
+  - the `find` `term` is free text (`textProblem`, CLI `parseText`): not blank — `""`,
+    whitespace, or only invisible characters (Cc, Cf) and combining marks — no lone surrogate,
+    no control character but TAB/LF/CR, no format character but ZWJ/ZWNJ;
+  - the object `name` and every other string parameter (`selection`, `area`, `type`,
+    `startyear`, `stand`, `regionalkey`, `classifyingkey1`, …) is a code (`tokenProblem`, CLI
+    `parseToken`): not blank in the same sense, no lone surrogate, no control or format
+    character at all (a zero-width space, a soft hyphen, a bidi control only ever make a code
+    match nothing — GENESIS then answers Status 104, "nothing found"); inner spaces are fine;
+  - `contents` is a comma-separated list (`splitList` + `listProblem`, CLI `parseList`): each
+    item is a code, and an empty item (`A,,B`, `A,`) refuses the whole list, naming the item.
+  GENESIS reads an empty parameter as "no filter", so a blank one would silently return
+  unfiltered data. `undefined` still means "omitted". A refusal quotes the value with its
+  invisible characters escaped (`quoteValue`: `"a\u200bb" contains an invisible or control
+  character (U+200B).`).
 - **Unknown parameter keys, lists and wrong value types** (`assertRequestParams`
   with the endpoint's key list, P10): GENESIS ignores a parameter it does not know
   and answers unfiltered, so `find`, `catalogue.*`, `metadata.*` and `data.*` accept
@@ -253,11 +265,12 @@ What the library rejects:
   A guest client reaches this only from the library; the CLI refuses `--guest` on
   those commands first. `whoami()` and `find()` work in either mode.
 
-Text is sent in Unicode NFC (P11): every string parameter and the object `name` are
-normalised (`composed` in `client.ts`), nothing else — no trimming, codes, selections and
-dates go out as given. The one free-text input, the `find` term, is also trimmed
-(`normalizeText` in `validate.ts`, exported: `trim()` then NFC; inner whitespace kept), since
-a term pasted with a trailing space or newline matched nothing. A decomposed umlaut (macOS clipboards, file names) looks the same but matched
+Every value is sent without surrounding whitespace and in Unicode NFC (P11, D8; `canonical` in
+`client.ts`): the `find` term by `normalizeText`, the object `name` and every other string
+parameter by `normalizeToken` (both exported: `trim()` then NFC; inner whitespace kept), and
+`contents` item by item (`A , B` goes out as `A,B`). A term or a code pasted with a trailing
+space or newline matched nothing (a code answered Status 104); until the 2026-10-21 round codes
+went out as given. A decomposed umlaut (macOS clipboards, file names) looks the same but matched
 nothing: live on 2026-10-06, `find` with a decomposed "Bevölkerung" answered every list
 `null`, the composed term 80 tables. Credentials are never normalised.
 
@@ -563,9 +576,12 @@ plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userin
 P21 README links (a relative link in `README.md` must point to a file `files` ships;
 other documents are linked by their GitHub URL, since npmjs.com shows the README),
 P23 the log on stderr (record format, `--log-format jsonl`, no secret in either format),
-P24 the input corpus (the `find` term goes out trimmed and in NFC, or is refused on both
-sides; GENESIS takes its parameters in the form body, so the adapter reads the term from the
-bodies the CLI and the library sent, and has no id input, as no value goes into a path), P25
+P24 the input corpus (the `find` term, the object codes and the filter values go out trimmed
+and in NFC, or are refused on both sides, a value of only invisible characters or with a
+control, format or half character included, its refusal showing the character escaped;
+`--contents` item by item; GENESIS takes its parameters in the form body, so the adapter reads
+them from the bodies the CLI and the library sent, and lists the codes as text inputs, as no
+value goes into a path), P25
 the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors),
 P27 big and odd answers (a large flat answer prints with `--compact` under a small heap, an answer
 full of DEL characters prints escaped or, past V8's longest string, is an ERROR record of

@@ -222,3 +222,26 @@ test("a refused value is quoted visibly: an invisible or format character is esc
   });
   assert.equal(mt.calls.length, 0);
 });
+
+test("codes and filter values go out trimmed and in NFC, a list item by item; an invisible character is refused (D8)", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.dataTable));
+  const c = new DestatisClient({ token: "0123456789abcdef0123456789abcdef", transport: mt.transport });
+  await c.data.table(" 12411-0001\n", { startyear: " 2020 ", contents: " BEV001 , é ", regionalkey: "05 * " });
+  const body = bodyOf(mt.calls[0]!);
+  assert.equal(body.get("name"), "12411-0001");
+  assert.equal(body.get("startyear"), "2020");
+  assert.equal(body.get("contents"), "BEV001,é");
+  assert.equal(body.get("regionalkey"), "05 *");
+  for (const [name, params] of [
+    ["12411​-0001", {}],
+    ["12411-0001", { contents: "A,,B" }],
+    ["12411-0001", { classifyingkey1: "­" }],
+    ["́", {}],
+  ] as const) {
+    await assert.rejects(c.data.table(name, params), DestatisValidationError, name);
+  }
+  // Free text keeps ZWJ (an emoji sequence) and inner whitespace.
+  await c.find({ term: " a‍b  c " });
+  assert.equal(bodyOf(mt.calls[1]!).get("term"), "a‍b  c");
+  assert.equal(mt.calls.length, 2);
+});

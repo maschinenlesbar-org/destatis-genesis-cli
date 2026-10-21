@@ -87,7 +87,9 @@ result count. Returns parallel arrays
 searched or when nothing of that type matched: a search without hits answers
 `Status.Code 0` with its arrays `null` (not `104`), exit 0. The term goes out without
 surrounding whitespace and in composed Unicode (NFC), as GENESIS matches it; a blank one
-is a usage error (exit 2) before any request.
+(also one of only invisible characters), or one holding a control or invisible character
+(a zero-width space, a soft hyphen; ZWJ in an emoji is fine), is a usage error (exit 2)
+before any request.
 
 ```bash
 destatis find "Bevölkerung" --category tables --pagelength 20
@@ -133,7 +135,10 @@ destatis data <kind> <name> [selection filters]
 table as a `";"`-delimited CSV string in `Object.Content` (German number
 format — comma decimals; `.` `-` `x` `/` `…` are value-status placeholders).
 
-Selection filters (narrow large tables — see the too-large note below):
+Selection filters (narrow large tables — see the too-large note below). The object code and
+every filter value go out without surrounding whitespace and in composed Unicode (NFC); a
+blank value, or one holding an invisible or control character (a zero-width space, a soft
+hyphen), is a usage error (exit 2) before any request:
 
 | Flag | GENESIS param |
 |---|---|
@@ -141,7 +146,7 @@ Selection filters (narrow large tables — see the too-large note below):
 | `--timeslices <n>` | `timeslices` (from the latest period back) |
 | `--region-var <code>` · `--region-key <key>` | `regionalvariable` / `regionalkey` |
 | `--class-var1..5 <code>` · `--class-key1..5 <key>` | `classifyingvariable{n}` / `classifyingkey{n}` |
-| `--contents <labels>` | `contents` (comma-separated) |
+| `--contents <labels>` | `contents` (comma-separated; each label is trimmed, an empty one is a usage error) |
 | `--stand <DD.MM.YYYY>` | `stand` (only newer data) |
 | `--structure` · `--transpose` · `--compress` | `structureinformation` / `transpose` / `compress` |
 
