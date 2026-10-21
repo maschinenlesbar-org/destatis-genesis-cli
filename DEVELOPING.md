@@ -545,7 +545,9 @@ P23 the log on stderr (record format, `--log-format jsonl`, no secret in either 
 P24 the input corpus (the `find` term goes out trimmed and in NFC, or is refused on both
 sides; GENESIS takes its parameters in the form body, so the adapter reads the term from the
 bodies the CLI and the library sent, and has no id input, as no value goes into a path), P25
-the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors) and
+the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors),
+P27 big and odd answers (a large flat answer prints with `--compact` under a small heap; it starts
+the built bin with `--max-old-space-size`, 30 s) and
 P26 `-o` integrity (a write cut short under `ulimit -f` leaves the old file and nothing else;
 an existing target and a missing directory are refused before any request; `/dev/null` and a
 FIFO are written in place; `--force` through a dangling link creates the file it names; a
@@ -635,7 +637,10 @@ set|unset|list` did, and every failure to read, write or use the file — a
 `CredentialsFileError`, exit 1 — whether `config` or a command that needs the login
 read it; a usage error of `config`, such as a refused name or value, stays `cli`) and
 `output`
-(the `-o` file written, `Wrote N bytes …`; a target refused before any request — `--force`
+(the `-o` file written, `Wrote N bytes …`; an answer that can't be printed, an `OutputError`, exit
+1: `The answer is nested too deeply to pretty-print; try --compact.` — the hint only when
+`--compact` prints this very answer, probed — or `The answer is too large …`, past V8's longest
+string; a target refused before any request — `--force`
 without `-o`, a directory, an existing path without `--force`, a file whose directory is missing
 or not writable (`CliIO.parentProblem`: `Cannot write to "<path>": the directory "<dir>" does not
 exist.`) — an `OutputTargetError`, exit 2; a write that failed after the request, a file that
