@@ -127,20 +127,20 @@ export interface DestatisClientOptions extends EngineOptions {
    * password. Not together with `username`/`password`: a token next to either is a
    * `DestatisValidationError` (`TOKEN_WITH_LOGIN_PROBLEM`), never a silent pick.
    */
-  token?: string;
+  token?: string | undefined;
   /**
    * Account username (10 chars, may be an email). Requires `password`: with only
    * one of the two (and no token) the constructor throws `DestatisValidationError`.
    */
-  username?: string;
+  username?: string | undefined;
   /** Account password (10–50 chars). */
-  password?: string;
+  password?: string | undefined;
   /**
    * Run without an account, as the GENESIS guest user: `whoami()` and `find()` only.
    * Must be set explicitly when no credential is given — a client with neither
    * throws `DestatisValidationError` — and must not be combined with one.
    */
-  guest?: boolean;
+  guest?: boolean | undefined;
 }
 
 /** `catalogue/*` browse endpoints — each returns an enveloped `List`. */

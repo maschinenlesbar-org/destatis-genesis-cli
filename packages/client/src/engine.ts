@@ -69,7 +69,7 @@ export interface RawResponse {
  */
 export interface EngineOptions {
   /** Base URL of the API. Defaults to https://genesis.destatis.de */
-  baseUrl?: string;
+  baseUrl?: string | undefined;
   /**
    * Swappable transport. Defaults to the built-in node http/https transport. The engine
    * enforces `timeoutMs` and `maxResponseBytes` whatever the transport does, reads a
@@ -77,44 +77,44 @@ export interface EngineOptions {
    * and turns everything a transport throws or returns malformed into a
    * `DestatisNetworkError`.
    */
-  transport?: Transport;
+  transport?: Transport | undefined;
   /** Value of the User-Agent header. */
-  userAgent?: string;
+  userAgent?: string | undefined;
   /** Extra headers sent on every request. */
-  defaultHeaders?: Record<string, string>;
+  defaultHeaders?: Record<string, string> | undefined;
   /**
    * Time limit per request in milliseconds, covering the whole response body, not
    * only idle gaps (0 disables; at most MAX_TIMEOUT_MS, 2^31 - 1 ms). Enforced by the
    * engine for every transport: the request's `signal` is aborted at the deadline and
    * the call rejects with a `DestatisNetworkError`.
    */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   /**
    * Number of automatic retries for transient (429/503) responses, 0..`MAX_RETRIES`
    * (10). Each waits `retryDelayMs * attempt`, or the response's `Retry-After` when that
    * is longer (up to `MAX_RETRY_AFTER_MS`; a longer one is not retried, and the error
    * says so).
    */
-  maxRetries?: number;
+  maxRetries?: number | undefined;
   /**
    * Base backoff between retries in milliseconds (grows linearly); used without a
    * Retry-After. At most `MAX_RETRY_AFTER_MS`.
    */
-  retryDelayMs?: number;
+  retryDelayMs?: number | undefined;
   /**
    * Hard cap on response body size in bytes (defends against memory exhaustion
    * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit;
    * at most `Number.MAX_SAFE_INTEGER`. The default transport stops reading at the cap;
    * for any other the engine checks the body it gets back.
    */
-  maxResponseBytes?: number;
+  maxResponseBytes?: number | undefined;
   /** Injectable sleep, primarily for deterministic tests. */
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: ((ms: number) => Promise<void>) | undefined;
   /**
    * Called once per retry, right before the backoff sleep, for each retried 429/503;
    * never when there is no retry. A throw is swallowed.
    */
-  onRetry?: (event: RetryEvent) => void;
+  onRetry?: ((event: RetryEvent) => void) | undefined;
 }
 
 /** What `EngineOptions.onRetry` is told about one retry. */
