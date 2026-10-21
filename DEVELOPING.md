@@ -549,7 +549,8 @@ the response corpus (a number JSON cannot carry exactly, and an empty answer, ar
 P26 `-o` integrity (a write cut short under `ulimit -f` leaves the old file and nothing else;
 an existing target and a missing directory are refused before any request; `/dev/null` and a
 FIFO are written in place; `--force` through a dangling link creates the file it names; a
-signal leaves no claim and no temporary file; it starts the built bin, 30 s).
+signal leaves no claim and no temporary file; stdout redirected to a file and cut short is exit
+1; it starts the built bin, 30 s).
 The CLI test helper's `parity` also takes the kit's form, `parity(argv, call, responder)`,
 which the shared bodies call.
 
@@ -638,7 +639,9 @@ read it; a usage error of `config`, such as a refused name or value, stays `cli`
 without `-o`, a directory, an existing path without `--force`, a file whose directory is missing
 or not writable (`CliIO.parentProblem`: `Cannot write to "<path>": the directory "<dir>" does not
 exist.`) — an `OutputTargetError`, exit 2; a write that failed after the request, a file that
-appeared meanwhile included, an `OutputError`, exit 1; and a stdout write error). A stream
+appeared meanwhile included, an `OutputError`, exit 1; and a stdout write error: when stdout is a regular file, `stdoutWriter`
+writes every byte with `writeAll`, so a write cut short — EFBIG under a file-size limit, ENOSPC —
+is an ERROR record and exit 1, never a short file with exit 0). A stream
 target (a character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place,
 with no claim, no temporary file and no `--force` needed. A file is written atomically
 (`writeFileAtomic` in `io.ts`, behind `CliIO.writeFile`): without `--force` the name is
