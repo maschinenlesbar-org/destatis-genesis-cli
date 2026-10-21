@@ -554,15 +554,23 @@ function firstInexactNumber(json: string): string | undefined {
 
 /**
  * Refuse a JSON answer (`text`, which parsed) holding a number JSON.parse changed: a
- * `DestatisParseError` rather than a changed value.
+ * `DestatisParseError` naming `request` rather than a changed value.
  */
-function assertExactNumbers(text: string, path: string): void {
+function assertExactNumbers(text: string, request: string): void {
   const inexact = firstInexactNumber(text);
   if (inexact !== undefined) {
-    throw new DestatisParseError(
-      `Unexpected response from ${path}: the number ${cutForMessage(inexact)} cannot be represented exactly.`,
-    );
+    throw new DestatisParseError(`${request}: the number ${cutForMessage(inexact)} cannot be represented exactly.`);
   }
+}
+
+/**
+ * The parse error for an answer that is not JSON, naming `request`. An HTML maintenance or proxy
+ * page is the usual one: its type is named, so it reads as an upstream problem, not a client bug.
+ */
+function notJson(request: string, contentType: string, cause: unknown): DestatisParseError {
+  const type = contentType.split(";")[0]?.trim() ?? "";
+  const hint = type !== "" && !/json/i.test(type) ? ` (expected JSON, got Content-Type "${cutForMessage(type)}")` : "";
+  return new DestatisParseError(`${request}: the answer is not valid JSON${hint}.`, { cause });
 }
 
 /** True for a ZIP file's local-header or empty-archive signature. */
@@ -579,15 +587,15 @@ function charsetOf(contentType: string): string | undefined {
  * Decode a response body by the charset its Content-Type names (UTF-8 when it names
  * none; a byte-order mark is dropped). GENESIS declares `charset=UTF-8`, but a mirror
  * or proxy answering in ISO-8859-1 would otherwise turn every umlaut into U+FFFD. An
- * unknown charset label is a `DestatisParseError`.
+ * unknown charset label is a `DestatisParseError` naming `request`.
  */
-function decodeBody(body: Buffer, contentType: string, path: string): string {
+function decodeBody(body: Buffer, contentType: string, request: string): string {
   const charset = charsetOf(contentType) ?? "utf-8";
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(charset);
   } catch {
-    throw new DestatisParseError(`Unsupported response charset "${cutForMessage(sanitizeServerText(charset))}" from ${path}.`);
+    throw new DestatisParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(charset))}".`);
   }
   return decoder.decode(body);
 }
@@ -595,7 +603,7 @@ function decodeBody(body: Buffer, contentType: string, path: string): string {
 /** decodeBody for error text: an unknown charset falls back to UTF-8 rather than hide the error. */
 function decodeErrorBody(body: Buffer, contentType: string): string {
   try {
-    return decodeBody(body, contentType, "");
+    return decodeBody(body, contentType, "error body");
   } catch {
     return body.toString("utf8");
   }
@@ -789,6 +797,15 @@ export class RequestEngine {
   }
 
   /**
+   * The request as an error about its answer names it: `POST https://genesis.destatis.de/…`,
+   * the URL absolute (so a message names the host that gave a bad answer, which matters with a
+   * custom base URL), credentials redacted and cut at MAX_MESSAGE_VALUE_LENGTH characters.
+   */
+  describeRequest(method: "GET" | "POST", path: string): string {
+    return `${method} ${cutForMessage(redactUrl(this.buildUrl(path)))}`;
+  }
+
+  /**
    * Perform a request with Accept negotiation and transient-error retries. POST
    * requests carry `params` as a form-urlencoded body; GET requests take none.
    *
@@ -938,17 +955,18 @@ export class RequestEngine {
   async postLoginCheck<T>(path: string, params: QueryParams, authHeaders: Record<string, string>): Promise<T> {
     const res = await this.request("POST", path, { params, accept: "application/json", authHeaders });
     const ctx = contextOf(authHeaders);
-    const text = decodeBody(res.data, res.contentType, path);
-    if (text.trim().length === 0) throw new DestatisParseError(`Empty response body from ${path}`);
+    const request = this.describeRequest("POST", path);
+    const text = decodeBody(res.data, res.contentType, request);
+    if (text.trim().length === 0) throw new DestatisParseError(`${request}: empty response body.`);
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch (cause) {
-      throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause: scrubThrown(cause, ctx) });
+      throw notJson(request, res.contentType, scrubThrown(cause, ctx));
     }
     const verdict = loginVerdict(parsed);
     if (verdict.outcome === "malformed") {
-      throw new DestatisParseError(`Unexpected response from ${path}: ${verdict.problem}; the login was not confirmed.`);
+      throw new DestatisParseError(`${request}: ${verdict.problem}; the login was not confirmed.`);
     }
     if (verdict.outcome === "rejected") {
       const detail = verdict.detail === undefined ? undefined : sanitizeServerText(scrub(verdict.detail, ctx));
@@ -964,7 +982,7 @@ export class RequestEngine {
         loginRejected: true,
       });
     }
-    assertExactNumbers(text, path);
+    assertExactNumbers(text, request);
     return parsed as T;
   }
 
@@ -991,20 +1009,21 @@ export class RequestEngine {
     authHeaders: Record<string, string>,
   ): Promise<RawResponse> {
     const res = await this.request("POST", path, { params, accept, authHeaders });
+    const request = this.describeRequest("POST", path);
     if (res.data.length === 0) {
-      throw new DestatisParseError(`Empty response body from ${path}: expected a file download.`);
+      throw new DestatisParseError(`${request}: empty response body; expected a file download.`);
     }
     const jsonType = /json/i.test(res.contentType);
     const ctx = contextOf(authHeaders);
     // A body labelled JSON is decoded by its charset; anything else is only sniffed.
-    const raw = jsonType ? decodeBody(res.data, res.contentType, path) : res.data.toString("utf8");
+    const raw = jsonType ? decodeBody(res.data, res.contentType, request) : res.data.toString("utf8");
     // An HTML page (a maintenance or proxy page, a login portal) is not the file either;
     // a ZIP — what GENESIS delivers for every format — always counts as one. Only a
     // download asked for as `format: "html"` may be HTML itself.
     const htmlPage = /html/i.test(res.contentType) || /^\s*(<!doctype html|<html)/i.test(raw.slice(0, 1024).replace(/^\uFEFF/, ""));
     if (!isZip(res.data) && htmlPage && params["format"] !== "html") {
       throw new DestatisParseError(
-        `Expected a file download from ${path}, got an HTML page (Content-Type ${cutForMessage(res.contentType) || "none"}); nothing was saved.`,
+        `${request}: expected a file download, got an HTML page (Content-Type ${cutForMessage(res.contentType) || "none"}); nothing was saved.`,
       );
     }
     if (!jsonType && !raw.trimStart().startsWith("{")) return res;
@@ -1015,7 +1034,7 @@ export class RequestEngine {
     } catch (cause) {
       if (!jsonType) return res; // starts with "{" but is not JSON: a real file
       throw new DestatisParseError(
-        `Expected a file download from ${path}, got an unparseable reply labelled ${cutForMessage(res.contentType)}.`,
+        `${request}: expected a file download, got an unparseable reply labelled ${cutForMessage(res.contentType)}.`,
         { cause: scrubThrown(cause, ctx) },
       );
     }
@@ -1025,9 +1044,7 @@ export class RequestEngine {
     this.checkLogicalStatus("POST", url, text, parsed, ctx, res.status);
     const s = genesisStatus(parsed);
     if (s === undefined) {
-      throw new DestatisParseError(
-        `Expected a file download from ${path}, got a JSON reply without a GENESIS status.`,
-      );
+      throw new DestatisParseError(`${request}: expected a file download, got a JSON reply without a GENESIS status.`);
     }
     const code = statusCode(s.Code);
     const type = typeof s.Type === "string" ? sanitizeServerText(scrub(s.Type, ctx)) : undefined;
@@ -1050,26 +1067,28 @@ export class RequestEngine {
     ctx: RequestContext,
     shape: ResponseShape,
   ): T {
-    const text = decodeBody(res.data, res.contentType, path);
+    // Every error about the answer names the request (`POST <url>: …`, credentials redacted).
+    const request = this.describeRequest(method, path);
+    const text = decodeBody(res.data, res.contentType, request);
     // Every GENESIS endpoint answers with a JSON body (the envelope, or the
     // helloworld objects); an empty 200 or a 204 is a broken response, not a
     // result — returning null would print "null" with exit 0.
     if (res.status === 204 || text.trim().length === 0) {
-      throw new DestatisParseError(`Empty response body from ${path}`);
+      throw new DestatisParseError(`${request}: empty response body.`);
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch (cause) {
-      throw new DestatisParseError(`Failed to parse JSON response from ${path}`, { cause: scrubThrown(cause, ctx) });
+      throw notJson(request, res.contentType, scrubThrown(cause, ctx));
     }
     this.checkLogicalStatus(method, this.buildUrl(path), scrub(text, ctx), parsed, ctx, res.status);
     // JSON.parse rounds and overflows numbers silently: refuse the answer rather than return a
     // changed value. After the status check, so an error answer stays the error it is.
-    assertExactNumbers(text, path);
+    assertExactNumbers(text, request);
     const problem = shapeProblem(parsed, shape);
     if (problem !== undefined) {
-      throw new DestatisParseError(`Unexpected response from ${path}: ${problem}.`);
+      throw new DestatisParseError(`${request}: unexpected response shape: ${problem}.`);
     }
     return parsed as T;
   }
