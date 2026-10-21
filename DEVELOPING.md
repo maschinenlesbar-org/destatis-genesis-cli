@@ -398,7 +398,10 @@ from <path>: the number <N> cannot be represented exactly.`, `firstInexactNumber
 `logincheck`): one out of a double's range (`1e400`), one past 2^53 in any written form
 (`12345678901234567890`, `…890.0`, `9007199254740993e0`, `9007199254740992.5`) and a non-zero
 one too small for a double (`1e-400`). Below 2^53 a decimal fraction keeps a double's usual
-precision. The table values themselves are strings in the CSV `Content`, never touched; the
+precision. Past 2^53 the number as written is compared with the number as printed
+(`String(value)`): a double a server wrote in its shortest form (`1E23`,
+`1.7976931348623157E308`) prints as the same number and passes; `12345678901234567890`,
+printed `12345678901234567000`, is refused. The table values themselves are strings in the CSV `Content`, never touched; the
 check runs after the status mapping, so an error answer stays the API error it is. A
 `data/*file` download is passed through as bytes, unchecked.
 
