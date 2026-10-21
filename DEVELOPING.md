@@ -381,6 +381,16 @@ with an object carrying `User-Agent`. `null`, `{}`, `[]`, a bare string or an un
 error object is a `DestatisParseError` (exit 1), never data. `logincheck` has its own
 check (below).
 
+A number JSON.parse cannot carry exactly is a `DestatisParseError` too (`Unexpected response
+from <path>: the number <N> cannot be represented exactly.`, `firstInexactNumber` in
+`engine.ts`), on every JSON path (`find`, `catalogue`, `metadata`, `data`, `whoami`,
+`logincheck`): one out of a double's range (`1e400`), one past 2^53 in any written form
+(`12345678901234567890`, `…890.0`, `9007199254740993e0`, `9007199254740992.5`) and a non-zero
+one too small for a double (`1e-400`). Below 2^53 a decimal fraction keeps a double's usual
+precision. The table values themselves are strings in the CSV `Content`, never touched; the
+check runs after the status mapping, so an error answer stays the API error it is. A
+`data/*file` download is passed through as bytes, unchecked.
+
 Auth failures skip the envelope: GENESIS sends a flat `{ Code, Content, Type }`
 body on a non-2xx status. `toApiError` reads it (enveloped or flat, via
 `genesisStatus`), so the error carries both the HTTP status and the GENESIS
