@@ -547,7 +547,9 @@ sides; GENESIS takes its parameters in the form body, so the adapter reads the t
 bodies the CLI and the library sent, and has no id input, as no value goes into a path), P25
 the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors) and
 P26 `-o` integrity (a write cut short under `ulimit -f` leaves the old file and nothing else;
-an existing target is refused before any request; it starts the built bin, 30 s).
+an existing target and a missing directory are refused before any request; `/dev/null` and a
+FIFO are written in place; `--force` through a dangling link creates the file it names; a
+signal leaves no claim and no temporary file; it starts the built bin, 30 s).
 The CLI test helper's `parity` also takes the kit's form, `parity(argv, call, responder)`,
 which the shared bodies call.
 
@@ -633,13 +635,18 @@ set|unset|list` did, and every failure to read, write or use the file — a
 read it; a usage error of `config`, such as a refused name or value, stays `cli`) and
 `output`
 (the `-o` file written, `Wrote N bytes …`; a target refused before any request — `--force`
-without `-o`, a directory, an existing path without `--force` — an `OutputTargetError`, exit 2;
-a write that failed after the request, a file that appeared meanwhile included, an
-`OutputError`, exit 1; and a stdout write error). The write is atomic
+without `-o`, a directory, an existing path without `--force`, a file whose directory is missing
+or not writable (`CliIO.parentProblem`: `Cannot write to "<path>": the directory "<dir>" does not
+exist.`) — an `OutputTargetError`, exit 2; a write that failed after the request, a file that
+appeared meanwhile included, an `OutputError`, exit 1; and a stdout write error). A stream
+target (a character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place,
+with no claim, no temporary file and no `--force` needed. A file is written atomically
 (`writeFileAtomic` in `io.ts`, behind `CliIO.writeFile`): without `--force` the name is
-claimed with an exclusive create, the data goes to a temporary file beside the target and is
-renamed over it, `--force` keeps the old file's mode and writes through a symlink, and a
-failure leaves neither a temporary file nor a claimed name. Code logs through `logOf(deps)` and never writes diagnostics with
+claimed with an exclusive create, the data goes to a temporary file beside the target
+(`.<name>.<pid>-<hex>.tmp`, the name shortened to stay within 255 bytes) and is renamed over it,
+`--force` keeps the old file's mode and writes through a symlink (`linkTarget`: a dangling one
+creates the file it names), and a failure leaves neither a temporary file nor a claimed name;
+nor does SIGINT, SIGTERM or SIGHUP during the write (exit 130, 143, 129). Code logs through `logOf(deps)` and never writes diagnostics with
 `io.err` directly. `run()` builds the logger from argv before commander parses it
 (`logFormatFromArgv`, used only for the records of a parse error: the first
 `--log-format`, the value of one of the program's own value options skipped; a

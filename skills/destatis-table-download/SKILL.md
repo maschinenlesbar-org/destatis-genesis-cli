@@ -92,3 +92,6 @@ Unzip with: unzip population.zip
   **destatis-statistics-finder**.
 - **Confirm the path and don't silently overwrite** — this skill writes to the
   user's filesystem; the CLI refuses existing targets without `--force`.
+- **A missing or read-only directory exits `2` before the download**
+  (`Cannot write to "…": the directory "…" does not exist.`) — nothing was fetched;
+  agree a writable path with the user rather than creating directories yourself.
