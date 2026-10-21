@@ -308,6 +308,8 @@ function createClient(
   fromFile = false,
 ): ReturnType<CliDeps["createClient"]> {
   options.onRetry = (event) => logOf(deps).warn("http", retryMessage(event));
+  // Text of an answer replaced with U+FFFD (invalid bytes, a lone surrogate) is never silent.
+  options.onWarning = (message) => logOf(deps).warn("api", message);
   try {
     return deps.createClient(options);
   } catch (err) {

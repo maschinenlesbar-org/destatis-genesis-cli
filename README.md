@@ -135,7 +135,10 @@ topic, the program and the area it comes from (`destatis.cli` for usage errors a
 credentials-on-the-command-line warning, `destatis.api` for GENESIS's answers, a
 malformed one included, and the credentials hint, `destatis.http` for the connection, `destatis.config` for the
 credentials file, `destatis.output` for the `-o` file and stdout — each with its
-successes and its failures). By default it is written log4j style; `--log-format jsonl`
+successes and its failures). An error about an answer names the request (`POST <url>: the
+answer is not valid JSON`). Text in an answer is never changed silently: bytes that are not
+valid in its charset and half characters (lone surrogates) are replaced with U+FFFD, so the
+output stays readable for `jq`, and a `WARN` record of `destatis.api` says how many. By default it is written log4j style; `--log-format jsonl`
 writes one JSON object per line instead. A record is always one line: a line break, a control
 character or a bidi control in a message (a server's text, a value you typed) is written
 as an escape (`\n`, `\u001b`, `\u202e`), so it can neither split a record nor forge

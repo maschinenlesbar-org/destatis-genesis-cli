@@ -345,6 +345,16 @@ Answers are decoded by the charset their `Content-Type` names (`decodeBody`,
 `DestatisParseError` (P8). GENESIS declares `charset=UTF-8`; a mirror or proxy in
 ISO-8859-1 would otherwise turn every umlaut into U+FFFD.
 
+Text in an answer is never changed silently (D2 of the 2026-10-21 round): bytes that are not
+valid in the charset (a `fatal` decode fails, then a lossy one counts the U+FFFD it added) and a
+lone surrogate written as a JSON escape (`\ud800` alone, rewritten as `\ufffd` before
+JSON.parse by `wellFormedEscapes`, one linear pass) are replaced with U+FFFD, so the result is
+well-formed text `jq` reads; it is not an error. The engine option `onWarning(message)` is told
+`POST <url>: N characters of the answer were not valid text (invalid bytes or a lone surrogate)
+and replaced with U+FFFD.` (a throw in it is swallowed); the CLI logs it as one `WARN` record of
+`destatis.api`. The JSON paths (`find`, `catalogue`, `metadata`, `data`, `whoami`,
+`logincheck`) do this; a download is passed through as bytes.
+
 **Redirects are NOT followed.** The canonical host `genesis.destatis.de` answers
 directly; the legacy `www-genesis.destatis.de` host cross-origin-redirects (`307`)
 to it, and following that would forward the credential headers to another origin.
