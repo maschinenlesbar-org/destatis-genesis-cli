@@ -591,6 +591,20 @@ test("--compact takes the gap path only for an answer holding a huge string, the
   assert.deepEqual(out, ['"stub"', '"stub"', '"stub"', '"stub"', '"stub"']);
 });
 
+test("terminal controls are escaped in chunks: the same text as one pass, across chunk edges (D7)", () => {
+  const DEL = String.fromCharCode(0x7f);
+  const C1 = String.fromCharCode(0x9b);
+  const RLO = String.fromCharCode(0x202e);
+  // Controls right before, at and after the 64 Ki edges, and a run of them.
+  const text = ["a".repeat(65535), DEL, C1, "b".repeat(65534), RLO, DEL.repeat(70000), "ü😀", C1].join("");
+  const { deps, out } = makeCli(() => jsonResponse(fx.whoami));
+  renderJson(deps, { compact: true }, { text });
+  const expected = JSON.stringify({ text }).replace(/[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+    (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  assert.equal(out[0], expected);
+  assert.deepEqual(JSON.parse(out[0]!), { text });
+});
+
 test("an empty 200 reply exits 1 instead of printing null", async () => {
   const cli = makeCli(() => rawResponse("", "application/json"));
   const code = await run(["--guest", "find", "x"], cli.deps);
