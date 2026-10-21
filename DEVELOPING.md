@@ -398,8 +398,10 @@ from <path>: the number <N> cannot be represented exactly.`, `firstInexactNumber
 `engine.ts`), on every JSON path (`find`, `catalogue`, `metadata`, `data`, `whoami`,
 `logincheck`): one out of a double's range (`1e400`), one past 2^53 in any written form
 (`12345678901234567890`, `…890.0`, `9007199254740993e0`, `9007199254740992.5`) and a non-zero
-one too small for a double (`1e-400`). Below 2^53 a decimal fraction keeps a double's usual
-precision. Past 2^53 the number as written is compared with the number as printed
+one too small for a double (`1e-400`), and a subnormal one (below 2.2250738585072014e-308, where a
+double has fewer digits) that does not print as written (`3e-324` would print `5e-324`). Between
+those edges a decimal fraction keeps a double's usual precision. Past 2^53 and below the normal
+range the number as written is compared with the number as printed
 (`String(value)`): a double a server wrote in its shortest form (`1E23`,
 `1.7976931348623157E308`) prints as the same number and passes; `12345678901234567890`,
 printed `12345678901234567000`, is refused. The table values themselves are strings in the CSV `Content`, never touched; the
