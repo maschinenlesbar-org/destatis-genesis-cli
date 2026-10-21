@@ -4,7 +4,7 @@
 
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { OutputError, logOf, type CliDeps } from "./io.js";
+import { OutputError, OutputTargetError, isDirectoryMessage, logOf, refuseOverwrite, type CliDeps } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
 import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse, type RetryEvent } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
 import type { DestatisClientOptions } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
@@ -360,29 +360,40 @@ export function toClientOptions(global: GlobalOptions, creds: ResolvedCredential
 }
 
 /**
- * Write bytes to the --output file, guarding against an accidental overwrite and
- * wrapping raw filesystem errors in a typed usage error. Refuses to clobber an
- * existing file — or to write through a symlink, dangling or not — unless --force
- * is set (fail-secure: no silent data loss), and
- * turns an ENOENT/EISDIR/EACCES from writeFile into a clean `OutputError` (a
- * DestatisUsageError, exit 2, logged under `destatis.output`) instead of an untyped
- * "Unexpected error: ENOENT: …".
+ * Check `-o` before any request, so a refused target costs none: `--force` without `-o`, a
+ * directory, and an existing path (a dangling link too) without `--force` are usage errors
+ * (`OutputTargetError`, exit 2, logged under `destatis.output`). `-o -` is stdout. The
+ * write checks again: a file that appears during the request is not overwritten either
+ * (an `OutputError` then).
+ */
+export function checkOutputTarget(deps: CliDeps, global: GlobalOptions): void {
+  if (global.force === true && global.output === undefined) {
+    throw new OutputTargetError("--force needs --output (it only allows overwriting the -o file).");
+  }
+  if (!toFile(global)) return;
+  const state = deps.io.fileState(global.output);
+  if (state === "directory") throw new OutputTargetError(isDirectoryMessage(global.output));
+  if (state === "exists" && global.force !== true) throw new OutputTargetError(refuseOverwrite(global.output));
+}
+
+/**
+ * Write bytes to the --output file, atomically (`CliIO.writeFile`): without --force an
+ * exclusive create, so a symlink (even a dangling one) or a file that appeared during the
+ * request is refused too. A failure — that refusal, a directory, ENOENT, EACCES, a full
+ * disk — is an `OutputError` (exit 1, logged under `destatis.output`) instead of an
+ * untyped "Unexpected error: ENOENT: …"; the old file is left as it was.
  */
 function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, data: Buffer): void {
-  const refuse = () =>
-    new OutputError(
-      `Refusing to overwrite existing file "${path}". Pass --force to overwrite, or choose a different --output path.`,
-    );
   const force = global.force === true;
-  if (!force && deps.io.fileExists(path)) throw refuse();
+  if (deps.io.fileState(path) === "directory") throw new OutputError(isDirectoryMessage(path));
   try {
-    // Without --force the write is an exclusive create, so a symlink (even a
-    // dangling one) or a file that appeared since the check is refused too.
     deps.io.writeFile(path, data, force);
   } catch (err) {
-    if (!force && (err as NodeJS.ErrnoException | undefined)?.code === "EEXIST") throw refuse();
+    if (!force && (err as NodeJS.ErrnoException | undefined)?.code === "EEXIST") {
+      throw new OutputError(refuseOverwrite(path), { cause: err });
+    }
     const reason = err instanceof Error ? err.message : String(err);
-    throw new OutputError(`Could not write to "${path}": ${reason}`, { cause: err });
+    throw new OutputError(`Could not write to "${cutForMessage(path)}": ${reason}`, { cause: err });
   }
 }
 
@@ -631,6 +642,8 @@ export function action(
     const positionals = args.slice(0, Math.max(0, args.length - 2)) as string[];
     const global = command.optsWithGlobals() as GlobalOptions;
     const root = rootCommand(command);
+    // A refused -o target is a usage error before anything else happens.
+    checkOutputTarget(deps, global);
     checkGuestAlone(global, root);
     // A command that sends no credentials (`hello`) neither reads nor checks them, so
     // a malformed or half-set variable can't stop it. It always runs as guest.

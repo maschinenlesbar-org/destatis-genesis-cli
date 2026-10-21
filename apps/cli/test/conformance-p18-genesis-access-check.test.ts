@@ -37,7 +37,7 @@ const LOGINCHECK_ARGV = ["logincheck"];
 /** The line the CLI adds to an auth error. */
 const CREDENTIALS_HINT = /^\S+ INFO  \[destatis\.api\] check your credentials/m;
 /** The members this repo's CliIO has besides out/err. */
-const IO_EXTRAS = { writeFile: () => {}, fileExists: () => false, outBinary: () => {} };
+const IO_EXTRAS = { writeFile: () => {}, fileState: () => "absent" as const, outBinary: () => {} };
 /** The server's texts (live, genesis.destatis.de 2026-10-05). */
 const FAIL_TEXT =
   "Ein Fehler ist aufgetreten. (Bitte prüfen und korrigieren Sie Ihren Nutzernamen oder Ihren Token bzw. das Passwort.)";

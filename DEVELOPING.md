@@ -618,8 +618,14 @@ set|unset|list` did, and every failure to read, write or use the file — a
 `CredentialsFileError`, exit 1 — whether `config` or a command that needs the login
 read it; a usage error of `config`, such as a refused name or value, stays `cli`) and
 `output`
-(the `-o` file written, `Wrote N bytes …`, or any failure to write it: an `OutputError`,
-still exit 2; and a stdout write error). Code logs through `logOf(deps)` and never writes diagnostics with
+(the `-o` file written, `Wrote N bytes …`; a target refused before any request — `--force`
+without `-o`, a directory, an existing path without `--force` — an `OutputTargetError`, exit 2;
+a write that failed after the request, a file that appeared meanwhile included, an
+`OutputError`, exit 1; and a stdout write error). The write is atomic
+(`writeFileAtomic` in `io.ts`, behind `CliIO.writeFile`): without `--force` the name is
+claimed with an exclusive create, the data goes to a temporary file beside the target and is
+renamed over it, `--force` keeps the old file's mode and writes through a symlink, and a
+failure leaves neither a temporary file nor a claimed name. Code logs through `logOf(deps)` and never writes diagnostics with
 `io.err` directly. `run()` builds the logger from argv before commander parses it
 (`logFormatFromArgv`, used only for the records of a parse error: the first
 `--log-format`, the value of one of the program's own value options skipped; a

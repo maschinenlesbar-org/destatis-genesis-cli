@@ -52,8 +52,8 @@ error (exit 2), not "the last one wins".
 | `--user-agent <ua>` | User-Agent header |
 | `--compact` | single-line JSON |
 | `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [destatis.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
-| `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout; `-o -` means stdout |
-| `--force` | overwrite the `--output` file if it already exists (otherwise the write is refused — also when a symlink, even a dangling one, sits at that path) |
+| `-o, --output <file>` | write output (JSON, or a download) to a file instead of stdout; `-o -` means stdout. The target is checked before any request: a directory, or an existing path without `--force`, is a usage error (exit 2). The new file replaces the old one only once it is complete, so a write that fails part-way (a full disk) leaves the old file as it was and no half-written one (exit 1) |
+| `--force` | overwrite the `--output` file if it already exists (otherwise it is refused — also when a symlink, even a dangling one, sits at that path); keeps the old file's mode and writes through a symlink to the file it points at. Without `-o` it is a usage error |
 
 ## hello / logincheck
 
@@ -176,8 +176,8 @@ destatis data tablefile 12411-0001 --format ffcsv -o population.zip
 | Code | Meaning |
 |---|---|
 | `0` | success (help/version included); also an **empty result** — see note |
-| `1` | API/logical error (including wrong or missing credentials), network or parse error |
-| `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command) |
+| `1` | API/logical error (including wrong or missing credentials), network or parse error, a failed `-o` write |
+| `2` | usage error (missing/partial credentials, bad flags/arguments, unknown command, a refused `-o` target) |
 | `4` | object not found — the rare `Status.Code 90` / a bare HTTP 404 (see note), and a `data <kind>file` download for a code that does not exist (`Status.Code 104`) |
 
 A reader that stops early (`destatis find … | head`) ends the run quietly with exit

@@ -19,7 +19,7 @@ async function exercise(extra: string[], failures: number, retryAfter?: string) 
       ? { status: 503, headers: retryAfter ? { "retry-after": retryAfter } : {}, body: Buffer.from("{}") }
       : { status: 200, headers: { "content-type": "application/json" }, body: Buffer.from(JSON.stringify(findResult)) };
   const deps: CliDeps = {
-    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {}, fileExists: () => false, outBinary: () => {} },
+    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {}, fileState: () => "absent" as const, outBinary: () => {} },
     env: { DESTATIS_USERNAME: "testuser01", DESTATIS_PASSWORD: "env-pw-value" },
     now: () => new Date("2026-01-02T03:04:05.678Z"),
     createClient: (opts) => new DestatisClient({ ...opts, transport, sleep: async () => {} }),

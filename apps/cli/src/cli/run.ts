@@ -5,7 +5,7 @@
 import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
 import { escapeControlChars } from "./shared.js";
-import { OutputError, logOf, type CliDeps } from "./io.js";
+import { OutputError, OutputTargetError, logOf, type CliDeps } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
 import { DEFAULT_LOG_FORMAT, createLogger, logFormatFromArgv, type LogFormat, type Logger } from "./log.js";
 import {
@@ -293,6 +293,7 @@ export function processLogger(argv: readonly string[], env: Record<string, strin
  * else `cli`.
  */
 function areaOf(err: DestatisError): string {
+  if (err instanceof OutputError) return "output";
   if (err instanceof DestatisNetworkError) return "http";
   if (err instanceof DestatisParseError) return "api";
   if (err instanceof CredentialsFileError) return "config";
@@ -337,9 +338,9 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
     if (err instanceof DestatisValidationError || err instanceof DestatisUsageError) {
       // Bad/missing arguments or credentials -> conventional usage exit code. A
       // DestatisValidationError is the library rejecting an input before any
-      // request (it extends DestatisUsageError; named here for clarity). An -o failure
-      // is a usage error too, logged in the area of the -o file.
-      log.error(err instanceof OutputError ? "output" : "cli", err.message);
+      // request (it extends DestatisUsageError; named here for clarity). A refused -o
+      // target is a usage error too, logged in the area of the -o file.
+      log.error(err instanceof OutputTargetError ? "output" : "cli", err.message);
       return 2;
     }
     if (err instanceof DestatisApiError) {

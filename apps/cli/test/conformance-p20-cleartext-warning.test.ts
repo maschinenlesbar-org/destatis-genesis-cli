@@ -45,7 +45,7 @@ function makeDeps(out: string[], err: string[], env: Record<string, string>): Cl
     body: Buffer.from(JSON.stringify(okBody)),
   });
   return {
-    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {}, fileExists: () => false, outBinary: () => {} },
+    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {}, fileState: () => "absent" as const, outBinary: () => {} },
     env: { DESTATIS_USERNAME: "testuser01", DESTATIS_PASSWORD: "env-pw-value", ...env },
     createClient: (opts) => new Client({ ...opts, transport }),
   };

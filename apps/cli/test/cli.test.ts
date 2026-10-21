@@ -23,7 +23,7 @@ function makeCli(
       out: (s) => out.push(s),
       err: (s) => err.push(s),
       writeFile: (p, d) => files.set(p, d),
-      fileExists: (p) => files.has(p),
+      fileState: (p) => (files.has(p) ? "exists" : "absent"),
       outBinary: (d) => out.push(d.toString("utf8")),
     },
     createClient: (opts) => new DestatisClient({ ...opts, transport: mt.transport }),
@@ -459,18 +459,18 @@ test("--force allows overwriting an existing --output file (GEN-04)", async () =
   assert.match(cli.files.get("/tmp/out.json")?.toString("utf8") ?? "", /12411-0001/);
 });
 
-test("a filesystem write error surfaces as a typed usage error, not Unexpected (GEN-04)", async () => {
+test("a filesystem write error surfaces as a typed output error (exit 1), not Unexpected (GEN-04, K7)", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   cli.deps.io.writeFile = () => {
     throw new Error("EACCES: permission denied, open '/root/out.json'");
   };
   const code = await run([...TOKEN, "--output", "/root/out.json", "catalogue", "tables"], cli.deps);
-  assert.equal(code, 2);
+  assert.equal(code, 1);
   assert.match(cli.err.join("\n"), /Could not write to .*EACCES/);
   assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
 });
 
-test("a file that appears between the check and the write (EEXIST) is refused like an existing one", async () => {
+test("a file that appears between the check and the write (EEXIST) is refused like an existing one, exit 1 (K7)", async () => {
   const cli = makeCli(() => jsonResponse(fx.tablesList));
   let overwriteFlag: boolean | undefined;
   cli.deps.io.writeFile = (_p, _d, overwrite) => {
@@ -478,7 +478,7 @@ test("a file that appears between the check and the write (EEXIST) is refused li
     throw Object.assign(new Error("EEXIST: file already exists"), { code: "EEXIST" });
   };
   const code = await run([...TOKEN, "-o", "race.json", "catalogue", "tables"], cli.deps);
-  assert.equal(code, 2);
+  assert.equal(code, 1);
   assert.equal(overwriteFlag, false);
   assert.match(cli.err.join("\n"), /Refusing to overwrite existing file "race.json"/);
 });
@@ -768,9 +768,13 @@ test("a subcommand's value option does not swallow the program's --log-format, i
   assert.match((JSON.parse(cli.err[0] ?? "") as Record<string, unknown>)["msg"] as string, /--start-year <year>' argument missing/);
 });
 
-test("every -o failure is an ERROR record of destatis.output, exit 2 as before (L8)", async () => {
+test("every -o failure is an ERROR record of destatis.output: a refused target exit 2 before any request, a failed write exit 1 (L8, K7)", async () => {
+  const refused = makeCli(() => jsonResponse(fx.tablesList));
+  refused.files.set("out.json", Buffer.from("existing")); // an existing file, no --force
+  assert.equal(await run([...TOKEN, "-o", "out.json", "catalogue", "tables"], refused.deps), 2);
+  assert.equal(refused.mt.calls.length, 0);
+  assert.match(untimed(refused.err.join("\n")), /^ERROR \[destatis\.output\] Refusing to overwrite/m);
   const failures: Array<(cli: ReturnType<typeof makeCli>) => void> = [
-    (cli) => cli.files.set("out.json", Buffer.from("existing")), // an existing file, no --force
     (cli) => {
       cli.deps.io.writeFile = () => {
         throw new Error("EACCES: permission denied, open 'out.json'");
@@ -785,8 +789,8 @@ test("every -o failure is an ERROR record of destatis.output, exit 2 as before (
   for (const fail of failures) {
     const cli = makeCli(() => jsonResponse(fx.tablesList));
     fail(cli);
-    assert.equal(await run([...TOKEN, "-o", "out.json", "catalogue", "tables"], cli.deps), 2);
-    assert.match(untimed(cli.err.join("\n")), /^ERROR \[destatis\.output\] (Refusing to overwrite|Could not write to)/m);
+    assert.equal(await run([...TOKEN, "-o", "out.json", "catalogue", "tables"], cli.deps), 1);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[destatis\.output\] Could not write to/m);
     assert.doesNotMatch(cli.err.join("\n"), /Unexpected error|ERROR \[destatis\.cli\]/);
   }
 });
