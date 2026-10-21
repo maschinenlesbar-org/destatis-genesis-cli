@@ -182,7 +182,8 @@ What the library rejects:
   skipped), in the forms a server echoes them back in: raw, JSON-escaped (also with
   DEL, C1 and bidi controls as stdout's JSON escapes them) and URL-encoded, as the library scrubs its
   errors (`contextOf` in `engine.ts`). That holds for stderr. On stdout a bare secret is
-  replaced only as a whole JSON string value (`redactWholeJsonValues`: `"Username": "***"`),
+  replaced only as a whole JSON string value (`redactWholeJsonValues`: `"Username": "***"`;
+  one linear pass without a regex, so a table of 100 MB in one string prints too),
   never inside other text — a password `2023` turned the year in `"Statistik 2023"` into
   `***` (03-1 of the 2026-10-09 round; the user's decision). `withoutStrayValues` drops the value from commander's "too many
   arguments" and `--x=value` "unknown option" errors, and from "unknown command"
