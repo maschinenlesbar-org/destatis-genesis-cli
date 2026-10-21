@@ -535,7 +535,15 @@ codes, P8/P9/P13 responses and errors, P18 GENESIS access check, P20 the
 plain-`http:` warning (the userinfo case is skipped: `--base-url` rejects userinfo),
 P21 README links (a relative link in `README.md` must point to a file `files` ships;
 other documents are linked by their GitHub URL, since npmjs.com shows the README),
-P23 the log on stderr (record format, `--log-format jsonl`, no secret in either format).
+P23 the log on stderr (record format, `--log-format jsonl`, no secret in either format),
+P24 the input corpus (the `find` term goes out trimmed and in NFC, or is refused on both
+sides; GENESIS takes its parameters in the form body, so the adapter reads the term from the
+bodies the CLI and the library sent, and has no id input, as no value goes into a path), P25
+the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors) and
+P26 `-o` integrity (a write cut short under `ulimit -f` leaves the old file and nothing else;
+an existing target is refused before any request; it starts the built bin, 30 s).
+The CLI test helper's `parity` also takes the kit's form, `parity(argv, call, responder)`,
+which the shared bodies call.
 
 ## Verified against a live account (2026-07-03)
 
