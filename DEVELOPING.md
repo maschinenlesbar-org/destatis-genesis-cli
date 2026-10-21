@@ -180,7 +180,7 @@ What the library rejects:
   `DESTATIS_*` variables and of any token-shaped argument (`looksLikeToken`) with
   `***` (`redactSecrets`: whole occurrences only, values under 4 characters
   skipped), in the forms a server echoes them back in: raw, JSON-escaped (also with
-  DEL and C1 as stdout's JSON escapes them) and URL-encoded, as the library scrubs its
+  DEL, C1 and bidi controls as stdout's JSON escapes them) and URL-encoded, as the library scrubs its
   errors (`contextOf` in `engine.ts`). That holds for stderr. On stdout a bare secret is
   replaced only as a whole JSON string value (`redactWholeJsonValues`: `"Username": "***"`),
   never inside other text — a password `2023` turned the year in `"Statistik 2023"` into

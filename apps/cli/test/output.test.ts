@@ -57,6 +57,19 @@ test("-o writes what stdout would show, plus a newline, and leaves no temporary 
   });
 });
 
+test("-o escapes the bidi formatting characters as stdout does", async () => {
+  await inTempDir(async (dir) => {
+    const served = { ...fx.whoami, "User-Agent": `A1${String.fromCharCode(0x202e)}live` };
+    const path = join(dir, "whoami.json");
+    const cli = makeCli(() => jsonResponse(served));
+    assert.equal(await run(["-o", path, "hello"], cli.deps), 0);
+    const written = readFileSync(path, "utf8");
+    assert.ok(!written.includes(String.fromCharCode(0x202e)));
+    assert.match(written, /A1\\u202elive/);
+    assert.deepEqual(JSON.parse(written), served);
+  });
+});
+
 test("a refused -o target is a usage error before any request", async () => {
   await inTempDir(async (dir) => {
     const existing = join(dir, "existing.json");

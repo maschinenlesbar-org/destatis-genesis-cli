@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { OutputError, OutputTargetError, isDirectoryMessage, logOf, refuseOverwrite, type CliDeps } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
-import { cleartextProblem, DEFAULT_BASE_URL, type RawResponse, type RetryEvent } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
+import { cleartextProblem, DEFAULT_BASE_URL, isBidiControl, type RawResponse, type RetryEvent } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
 import type { DestatisClientOptions } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
 import { DestatisError, DestatisUsageError, DestatisValidationError, cutForMessage } from "@maschinenlesbar.org/destatis-genesis-client/internal/errors";
 import {
@@ -398,18 +398,19 @@ function writeOutputFile(deps: CliDeps, global: GlobalOptions, path: string, dat
 }
 
 /**
- * Escape the control characters JSON.stringify leaves raw. It escapes C0 (including
- * ESC) but not DEL or the C1 range U+0080–U+009F, and terminals may act on those —
- * U+009B is the 8-bit form of CSI. The output is server data, so escape them; the
- * result is equivalent, valid JSON (these characters only occur inside strings).
- * Checked by char code so the source stays free of control bytes.
+ * Escape the characters JSON.stringify leaves raw although a terminal acts on them. It
+ * escapes C0 (including ESC) but not DEL, the C1 range U+0080–U+009F (U+009B is the 8-bit
+ * form of CSI) or the bidi formatting characters (isBidiControl), which reorder the text
+ * that follows. The output is server data, so escape them; the result is equivalent, valid
+ * JSON (these characters only occur inside strings). Checked by char code so the source
+ * stays free of control bytes.
  */
 export function escapeControlChars(json: string): string {
   let result = "";
   let from = 0;
   for (let i = 0; i < json.length; i++) {
     const c = json.charCodeAt(i);
-    if (c >= 0x7f && c <= 0x9f) {
+    if ((c >= 0x7f && c <= 0x9f) || isBidiControl(c)) {
       result += json.slice(from, i) + "\\u" + c.toString(16).padStart(4, "0");
       from = i + 1;
     }
