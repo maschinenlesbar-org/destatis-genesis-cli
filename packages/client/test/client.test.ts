@@ -5,7 +5,7 @@ import { makeMockTransport, jsonResponse, bodyOf, type MockTransport } from "./h
 import type { HttpRequest, HttpResponse } from "../src/http.js";
 import * as fx from "./fixtures.js";
 import { DestatisValidationError } from "../src/errors.js";
-import { GUEST_WITH_CREDENTIALS_PROBLEM, NO_CREDENTIALS_PROBLEM, TOKEN_WITH_LOGIN_PROBLEM } from "../src/validate.js";
+import { GUEST_WITH_CREDENTIALS_PROBLEM, NO_CREDENTIALS_PROBLEM, TOKEN_WITH_LOGIN_PROBLEM, normalizeText } from "../src/validate.js";
 
 function client(
   responder: (req: HttpRequest) => HttpResponse,
@@ -179,6 +179,23 @@ test("a client with a custom transport rejects a non-http(s) base URL before sen
     );
     assert.equal(mt.calls.length, 0);
   }
+});
+
+test("K6: the find term goes out trimmed and in NFC; a blank one is refused before any request", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.findResult));
+  const c = new DestatisClient({ guest: true, transport: mt.transport });
+  for (const term of ["  Bevölkerung  ", "Bevölkerung\n", "\tBevölkerung", " Bevölkerung ", "Bevölkerung　"]) {
+    await c.find({ term });
+    assert.equal(bodyOf(mt.last()).get("term"), "Bevölkerung", JSON.stringify(term));
+  }
+  await c.find({ term: " a  b " });
+  assert.equal(bodyOf(mt.last()).get("term"), "a  b");
+  const before = mt.calls.length;
+  for (const term of ["", " ", "\n\t", " ", "　"]) {
+    await assert.rejects(c.find({ term }), DestatisValidationError, JSON.stringify(term));
+  }
+  assert.equal(mt.calls.length, before);
+  assert.equal(normalizeText("  Bevölkerung\n"), "Bevölkerung");
 });
 
 test("text parameters and object codes are sent in Unicode NFC (P11)", async () => {

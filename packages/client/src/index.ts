@@ -48,6 +48,7 @@ export {
   intRangeProblem,
   looksLikeToken,
   nonBlankProblem,
+  normalizeText,
   oneOfProblem,
   plainObjectProblem,
   functionProblem,

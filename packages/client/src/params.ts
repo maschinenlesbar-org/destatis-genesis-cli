@@ -6,7 +6,8 @@
 // filter". The enumerated parameters (language, category, the criteria, format) must be
 // one of the values exported below; pagelength is an integer from 1 to
 // MAX_PAGELENGTH and timeslices a non-negative integer. Valid values are sent as-is, never
-// trimmed — only normalised to Unicode NFC, which GENESIS matches.
+// trimmed — only normalised to Unicode NFC, which GENESIS matches — except the free-text
+// `find` term, which is trimmed too (`normalizeText`).
 
 /** Most results a list request may ask for (`pagelength`, the server's maximum). */
 export const MAX_PAGELENGTH = 25000;

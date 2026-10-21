@@ -30,6 +30,7 @@ import {
   credentialProblem,
   credentialsRequiredProblem,
   nonBlankProblem,
+  normalizeText,
   plainObjectProblem,
   tokenOrLoginProblem,
 } from "./validate.js";
@@ -98,26 +99,27 @@ function paramsOf(params: unknown, keys: readonly string[], options: unknown = {
   const copy = { ...(params as object) } as QueryParams;
   assertRequestParams(copy, keys, options as ParamOptions);
   for (const [key, value] of Object.entries(copy)) {
-    if (typeof value === "string") copy[key] = normalizeText(value);
+    if (typeof value === "string") copy[key] = composed(value);
   }
   return copy;
 }
 
 /**
- * Text as GENESIS matches it: Unicode NFC (P11). A term typed or pasted in decomposed
- * form ("o" + U+0308, as macOS file names and some clipboards produce) looks identical
- * but matched nothing — live, `find "Bevölkerung"` decomposed answered every list
- * `null`, composed 80 tables. Nothing else is changed (no trimming: values are sent as
- * given).
+ * A code, selection or other parameter as GENESIS matches it: Unicode NFC (P11). A value
+ * typed or pasted in decomposed form ("o" + U+0308, as macOS file names and some
+ * clipboards produce) looks identical but matched nothing — live, `find "Bevölkerung"`
+ * decomposed answered every list `null`, composed 80 tables. Nothing else is changed (no
+ * trimming: a code is sent as given). The free-text `find` term is trimmed too
+ * (`normalizeText`).
  */
-function normalizeText(value: string): string {
+function composed(value: string): string {
   return value.normalize("NFC");
 }
 
 /** Validate a request object's required `name` (the object code) and its parameters. */
 function named(name: string, params: unknown, keys: readonly string[], options: unknown): QueryParams {
   assertValid("name", name, nonBlankProblem);
-  return { name: normalizeText(name), ...paramsOf(params, keys, options) } as QueryParams;
+  return { name: composed(name), ...paramsOf(params, keys, options) } as QueryParams;
 }
 
 /** Options for the GENESIS client (engine options plus credentials). */
@@ -357,6 +359,9 @@ export class DestatisClient {
   async find(params: FindParams, options: ParamOptions = {}): Promise<FindResponse> {
     assertValid("params", params, plainObjectProblem);
     assertValid("term", params.term, nonBlankProblem);
-    return postJson(this.engine, `${API}/find/find`, paramsOf(params, FIND_PARAM_KEYS, options), () => this.authHeaders());
+    const checked = paramsOf(params, FIND_PARAM_KEYS, options);
+    // The term is free text: trimmed as well as composed (`normalizeText`).
+    checked["term"] = normalizeText(params.term);
+    return postJson(this.engine, `${API}/find/find`, checked, () => this.authHeaders());
   }
 }

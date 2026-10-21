@@ -85,7 +85,9 @@ category is sent and GENESIS searches every object type. `--pagelength` bounds t
 result count. Returns parallel arrays
 (`Tables`/`Statistics`/`Cubes`/`Timeseries`/`Variables`), each `null` when not
 searched or when nothing of that type matched: a search without hits answers
-`Status.Code 0` with its arrays `null` (not `104`), exit 0.
+`Status.Code 0` with its arrays `null` (not `104`), exit 0. The term goes out without
+surrounding whitespace and in composed Unicode (NFC), as GENESIS matches it; a blank one
+is a usage error (exit 2) before any request.
 
 ```bash
 destatis find "Bevölkerung" --category tables --pagelength 20
