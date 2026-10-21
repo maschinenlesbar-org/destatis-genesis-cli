@@ -209,3 +209,16 @@ test("text parameters and object codes are sent in Unicode NFC (P11)", async () 
   await c.metadata.table(nfd).catch(() => undefined);
   assert.equal(bodyOf(mt.last()).get("name"), "Bevölkerung");
 });
+
+test("a refused value is quoted visibly: an invisible or format character is escaped, never raw (D10)", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.findResult));
+  const c = new DestatisClient({ guest: true, transport: mt.transport });
+  const zwsp = String.fromCharCode(0x200b);
+  await assert.rejects(c.find({ term: "x", [`a${zwsp}b`]: "1" } as never), (err: Error) => {
+    assert.ok(err instanceof DestatisValidationError);
+    assert.match(err.message, /unknown parameter "a\\u200bb"/);
+    assert.ok(!err.message.includes(zwsp), err.message);
+    return true;
+  });
+  assert.equal(mt.calls.length, 0);
+});
