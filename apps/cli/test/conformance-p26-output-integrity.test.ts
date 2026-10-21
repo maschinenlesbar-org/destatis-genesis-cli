@@ -25,10 +25,13 @@ const BIN = fileURLToPath(new URL("../src/cli/index.js", import.meta.url));
 const outputArgv = (base: string, file: string, force: boolean): string[] => [
   "--base-url", base, "--max-retries", "0", "-o", file, ...(force ? ["--force"] : []), "--guest", "find", "x",
 ];
-/** An answer of about 200 kB for that command. */
-const bigBody = (): unknown => ({
-  Status: { Code: 0, Content: "ok", Type: "Information" },
-  Tables: Array.from({ length: 10000 }, (_, i) => ({ Code: `t${i}`, Content: "Bevölkerung" })),
+/** An answer of about 200 kB for that command, as the server sends it (GENESIS answers JSON). */
+const bigAnswer = (): { body: string; contentType: string } => ({
+  body: JSON.stringify({
+    Status: { Code: 0, Content: "ok", Type: "Information" },
+    Tables: Array.from({ length: 10000 }, (_, i) => ({ Code: `t${i}`, Content: "Bevölkerung" })),
+  }),
+  contentType: "application/json",
 });
 /** The log program, as in `ERROR [<bin>.output]`. */
 const PROGRAM = "destatis";
@@ -54,12 +57,12 @@ function runLimited(argv: string[]): Promise<{ code: number; stderr: string }> {
 }
 
 async function withServer(body: (base: string, requests: () => number) => Promise<void>): Promise<void> {
-  const answer = JSON.stringify(bigBody());
+  const answer = bigAnswer();
   let count = 0;
   const server = http.createServer((_req, res) => {
     count += 1;
-    res.setHeader("content-type", "application/json");
-    res.end(answer);
+    res.setHeader("content-type", answer.contentType);
+    res.end(answer.body);
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   try {
