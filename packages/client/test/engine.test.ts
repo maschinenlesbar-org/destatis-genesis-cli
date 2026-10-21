@@ -805,3 +805,15 @@ test("K3: a timeout, the size cap, a refused connection and a DNS failure name t
   const e = new RequestEngine({ transport: () => Promise.reject(named) });
   await assert.rejects(e.postJson("/find/find", {}, {}), (err) => err === named);
 });
+
+test("a header named __proto__ is an ordinary header, never the prototype of the headers read (T12)", async () => {
+  // A JavaScript transport may return any object; JSON.parse makes "__proto__" an own key.
+  const headers = JSON.parse('{"__proto__":{"content-type":"application/json; charset=x-bogus"}}') as Record<string, string>;
+  const body = Buffer.from('{"User-Agent":"destatis-genesis-cli"}');
+  const e = new RequestEngine({ transport: async () => ({ status: 200, headers, body }) });
+  // With the prototype set, its charset was read as the answer's and the answer refused.
+  assert.deepEqual(await e.getJson("/helloworld/whoami"), { "User-Agent": "destatis-genesis-cli" });
+  const fetchLike = new Headers([["__proto__", "x"], ["content-type", "application/json; charset=utf-8"]]);
+  const f = new RequestEngine({ transport: async () => ({ status: 200, headers: fetchLike as unknown as Record<string, string>, body }) });
+  assert.deepEqual(await f.getJson("/helloworld/whoami"), { "User-Agent": "destatis-genesis-cli" });
+});
