@@ -19,6 +19,7 @@ import {
   type HttpResponse,
   type Transport,
 } from "./http.js";
+import { constants } from "node:buffer";
 import { TextDecoder } from "node:util";
 import { buildQueryString, type QueryParams } from "./query.js";
 import {
@@ -43,6 +44,8 @@ import {
 } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://genesis.destatis.de";
+/** V8's longest string (2^29 − 24 characters on 64-bit). */
+const MAX_STRING_LENGTH = constants.MAX_STRING_LENGTH;
 const DEFAULT_USER_AGENT = "destatis-genesis-cli";
 // The charset is REQUIRED: without it GENESIS decodes the body as Latin-1, so a
 // UTF-8 umlaut (e.g. "Bevölkerung") arrives mojibaked and matches nothing.
@@ -715,21 +718,51 @@ function decodeBody(body: Buffer, contentType: string, request: string): { text:
   }
   try {
     return { text: decoder.decode(body), replaced: 0 };
-  } catch {
+  } catch (err) {
+    if (isStringTooLong(err)) throw tooLargeForText(request, body);
     // Not valid in the charset: decode with replacement, and count what was replaced.
-    const text = new TextDecoder(decoder.encoding).decode(body);
+    let text: string;
+    try {
+      text = new TextDecoder(decoder.encoding).decode(body);
+    } catch (again) {
+      if (isStringTooLong(again)) throw tooLargeForText(request, body);
+      throw again;
+    }
     const sent = decoder.encoding === "utf-8" ? countBytes(body, REPLACEMENT_UTF8) : 0;
     return { text, replaced: countChar(text, 0xfffd) - sent };
   }
 }
 
-/** decodeBody for error text: an unknown charset falls back to UTF-8 rather than hide the error. */
+/**
+ * decodeBody for error text: an unknown charset falls back to UTF-8 rather than hide the error.
+ * A body too large to be a string (maxResponseBytes lifted) is left out: the status is the error.
+ */
 function decodeErrorBody(body: Buffer, contentType: string): string {
   try {
     return decodeBody(body, contentType, "error body").text;
   } catch {
-    return body.toString("utf8");
+    try {
+      return body.toString("utf8");
+    } catch (err) {
+      if (!isStringTooLong(err)) throw err;
+      return "";
+    }
   }
+}
+
+/**
+ * True for V8's error for a string past its longest one (2^29 − 24 characters on 64-bit): a body
+ * of 512 MB and more, possible once `maxResponseBytes` is lifted, can't be decoded into one.
+ */
+function isStringTooLong(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "ERR_STRING_TOO_LONG";
+}
+
+/** The parse error for a body too large to decode: it used to escape as a plain Error ("Unexpected error"). */
+function tooLargeForText(request: string, body: Buffer): DestatisParseError {
+  return new DestatisParseError(
+    `${request}: the answer is too large to read as text (${body.byteLength} bytes; the longest string is ${MAX_STRING_LENGTH} characters).`,
+  );
 }
 
 /** U+FFFD in UTF-8. */
@@ -1238,18 +1271,26 @@ export class RequestEngine {
     }
     const jsonType = /json/i.test(res.contentType);
     const ctx = contextOf(authHeaders);
-    // A body labelled JSON is decoded by its charset; anything else is only sniffed.
-    const raw = jsonType ? decodeBody(res.data, res.contentType, request).text : res.data.toString("utf8");
+    // A body labelled JSON is decoded by its charset; anything else is only sniffed. One not
+    // labelled JSON that is too large to be a string (512 MB and more, maxResponseBytes lifted)
+    // is no reply from GENESIS: only its head is sniffed, and it is the file.
+    let raw: string | undefined;
+    try {
+      raw = jsonType ? decodeBody(res.data, res.contentType, request).text : res.data.toString("utf8");
+    } catch (err) {
+      if (jsonType || !isStringTooLong(err)) throw err;
+    }
+    const head = raw ?? res.data.subarray(0, 1024).toString("utf8");
     // An HTML page (a maintenance or proxy page, a login portal) is not the file either;
     // a ZIP — what GENESIS delivers for every format — always counts as one. Only a
     // download asked for as `format: "html"` may be HTML itself.
-    const htmlPage = /html/i.test(res.contentType) || /^\s*(<!doctype html|<html)/i.test(raw.slice(0, 1024).replace(/^\uFEFF/, ""));
+    const htmlPage = /html/i.test(res.contentType) || /^\s*(<!doctype html|<html)/i.test(head.slice(0, 1024).replace(/^\uFEFF/, ""));
     if (!isZip(res.data) && htmlPage && params["format"] !== "html") {
       throw new DestatisParseError(
         `${request}: expected a file download, got an HTML page (Content-Type ${cutForMessage(res.contentType) || "none"}); nothing was saved.`,
       );
     }
-    if (!jsonType && !raw.trimStart().startsWith("{")) return res;
+    if (raw === undefined || (!jsonType && !raw.trimStart().startsWith("{"))) return res;
 
     let parsed: unknown;
     try {

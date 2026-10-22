@@ -366,7 +366,12 @@ well-formed text `jq` reads; it is not an error. The engine option `onWarning(me
 `POST <url>: N characters of the answer were not valid text (invalid bytes or a lone surrogate)
 and replaced with U+FFFD.` (a throw in it is swallowed); the CLI logs it as one `WARN` record of
 `destatis.api`. The JSON paths (`find`, `catalogue`, `metadata`, `data`, `whoami`,
-`logincheck`) do this; a download is passed through as bytes.
+`logincheck`) do this; a download is passed through as bytes. A JSON body too large to become
+one string (512 MB and more, possible only with `maxResponseBytes: 0` or
+`--max-response-bytes 0`) is a `DestatisParseError`, `POST <url>: the answer is too large to
+read as text (N bytes; the longest string is 536870888 characters).`, from either decode, not a
+plain `Error` ("Unexpected error" in the CLI); an error status with such a body keeps its
+`DestatisApiError`, without the body.
 
 **Redirects are NOT followed.** The canonical host `genesis.destatis.de` answers
 directly; the legacy `www-genesis.destatis.de` host cross-origin-redirects (`307`)
@@ -406,7 +411,9 @@ above, and otherwise a `DestatisApiError` carrying that status — `104` include
 which there means "no such object" (`isNotFound`, exit 4). An HTML page (by
 Content-Type or a leading `<!doctype html`/`<html`) that is not a ZIP is a
 `DestatisParseError` too, unless the call asked for `format: "html"` (P9). Nothing is
-written.
+written. A download not labelled JSON that is too large to be one string is no reply from
+GENESIS: only its first 1 KiB is sniffed for an HTML page, and it is the file (it used to end
+in "Unexpected error"); one labelled JSON is the parse error above.
 
 The JSON endpoints check the documented shape after the status mapping
 (`shapeProblem`, P9): `find`, `catalogue`, `metadata` and `data` must answer with the
