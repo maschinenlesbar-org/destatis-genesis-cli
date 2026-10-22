@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { run } from "../src/cli/run.js";
+import { redactionFor, run } from "../src/cli/run.js";
 import { renderJson } from "../src/cli/shared.js";
 import { DestatisClient } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
 import type { CliDeps } from "../src/cli/io.js";
@@ -868,4 +868,64 @@ test("commander's echo of a refused value shows an invisible or format character
     assert.ok(!err.includes(zwsp) && !err.includes(shy), err);
     assert.match(err, /\\u200b|\\u00ad/, err);
   }
+});
+
+// T15 of the 2026-10-21 fix round (jobsuche-cli 28be809, ladesaeulenregister-cli 001c48d): a URL
+// with a password anywhere in an argument — padded, after a dash, inside a phrase — must never
+// reach stderr, neither raw in a refusal, a note, a server's echo or commander's echo nor
+// percent-encoded in a request URL.
+test("a password in a URL inside any argument is redacted on stderr, raw or percent-encoded (T15)", async () => {
+  const url = "https://bob:s3cretpw@host.example/x";
+  const argvs = [
+    ["find", ` ${url}`],
+    ["find", `Bevölkerung ${url}`],
+    ["find", `-${url}`],
+    ["find", "--", `-${url}`],
+    ["catalogue", "tables", ` ${url}`],
+    ["catalogue", "tables", "12*", "--area", `all ${url}`],
+    ["metadata", "table", `12411 ${url}`],
+    ["data", "table", "12411-0001", "--region-key", ` ${url}`],
+    ["data", "table", "12411-0001", "--contents", `BEVSTD, ${url}`],
+    ["data", "table", "12411-0001", `--stand=01.01.2020 ${url}`],
+    ["data", "tablefile", ` ${url}`, "-o", "x.zip"],
+    ["-o", ` -${url}`, "data", "table", "12411-0001"],
+    ["-o", `-${url}`, "data", "table", "12411-0001"],
+    [`--output=-${url}`, "hello"],
+    ["--user-agent", `agent ${url}\u0001`, "hello"],
+    ["--pagelength", `5 ${url}`, "find", "x"],
+    ["--language", ` ${url}`, "hello"],
+    ["--base-url", ` ${url}`, "hello"],
+    ["--base-url", url, "hello"],
+    [` ${url}`],
+    ["hello", ` ${url}`],
+    ["hello", `--bogus= ${url}`],
+    ["find", "x", "--bogus", ` ${url}`],
+  ];
+  const answers = [
+    () => jsonResponse({ ...(fx.notFound as object), Status: { Code: 90, Type: "Fehler", Content: `nichts für ${url} gefunden` } }),
+    () => rawResponse(`not found: ${url}`, "text/plain", 404),
+    () => rawResponse("busy", "text/plain", 503),
+  ];
+  for (const argv of argvs) {
+    for (const answer of answers) {
+      const cli = makeCli(answer, { DESTATIS_API_TOKEN: "0123456789abcdef0123456789abcdef" });
+      await run(["--max-retries", "0", ...argv], cli.deps);
+      const err = cli.err.join("\n");
+      assert.doesNotMatch(err, /s3cretpw|bob%3As3|s3cretpw%40/, `${JSON.stringify(argv)}: ${err}`);
+    }
+  }
+});
+
+test("the search for URLs inside an argument is linear: a 1 MB argument is read at once (T15)", async () => {
+  // A pattern retried at every position took ~3 s for 40 000 scheme characters without "://".
+  for (const big of ["a".repeat(1 << 20), "a://".repeat(1 << 18), `${"a".repeat(1 << 20)}://bob:s3cretpw@h/`]) {
+    const started = performance.now();
+    const redaction = redactionFor(["find", big], {});
+    redaction.err(`x ${big.slice(-40)}`);
+    assert.ok(performance.now() - started < 1000, `${big.slice(0, 8)}…: ${Math.round(performance.now() - started)} ms`);
+  }
+  // At most 64 URLs inside one argument are read; the first ones are redacted.
+  const many = Array.from({ length: 100 }, (_, i) => ` https://u${i}:pw${i}xyz@h/`).join("");
+  const err = redactionFor(["find", many], {}).err(many);
+  assert.ok(!err.includes("pw0xyz") && !err.includes("pw63xyz"), err.slice(0, 200));
 });
