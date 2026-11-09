@@ -229,9 +229,17 @@ What the library rejects:
   non-string `token`/`username`/`password`/`userAgent` (`Expected a string.`) are a
   `DestatisValidationError`, never a raw `TypeError` — and never sent: spreading a
   string parameter object used to send `0=x`. Server text in an error (`detail` and
-  the message) is cut at `MAX_MESSAGE_VALUE_LENGTH` (500) characters, never inside a
+  the message) is cleaned by `sanitizeServerText` (engine.ts): it reads at most the first
+  16 384 characters (`MAX_SERVER_TEXT`), drops whole terminal escape sequences (CSI, OSC and
+  the other control strings, a control string ending at the next introducer), then the C0
+  controls but whitespace, DEL, C1 and every format character (Cf: bidi controls, zero-width
+  characters, a soft hyphen), and folds whitespace runs into one space — linear regex
+  replaces, so a 16 MB hostile detail costs neither seconds nor the heap. It is then cut at
+  `MAX_MESSAGE_VALUE_LENGTH` (500) characters, never inside a
   surrogate pair (`cutText`), so the message stays well-formed; `body` keeps the
-  full answer. Every other server value an own message quotes (a `Status.Type`, a
+  full answer. Text built from many pieces of an answer (`wellFormedEscapes`' repairs,
+  `scanNumbers`' quoted members) goes through a `TextBuilder` (errors.ts), joined in
+  batches, so memory follows the text, not the number of pieces. Every other server value an own message quotes (a `Status.Type`, a
   charset) goes through the same `cutForMessage`, so `err.message` stays bounded for a
   library caller.
 - **Half a credential pair** (`credentialPairProblem`): with no token, a

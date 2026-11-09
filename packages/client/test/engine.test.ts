@@ -1,12 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { TextDecoder } from "node:util";
-import { MAX_RETRY_AFTER_MS, RequestEngine, bigIntegerKeysOption, firstInexactNumber, parseRetryAfter, redactUrl, scanNumbers } from "../src/engine.js";
+import {
+  MAX_RETRY_AFTER_MS,
+  RequestEngine,
+  bigIntegerKeysOption,
+  firstInexactNumber,
+  parseRetryAfter,
+  redactUrl,
+  sanitizeServerText,
+  scanNumbers,
+} from "../src/engine.js";
 import {
   DestatisApiError,
   DestatisNetworkError,
   DestatisParseError,
   DestatisValidationError,
+  TextBuilder,
   cutText,
   toWellFormed,
 } from "../src/errors.js";
@@ -307,12 +318,13 @@ test("strips terminal control characters from a plain-text error detail (GEN-03)
 });
 
 test("strips terminal control characters from a logical Status.Content (GEN-03)", async () => {
-  const body = { Status: { Code: 90, Type: "Fehler", Content: `clean${ESC}text` } };
+  // A whole escape sequence goes, not only its ESC: `ESC [31m` and the short `ESC t`.
+  const body = { Status: { Code: 90, Type: "Fehler", Content: `clean${ESC}[31m ${ESC}text` } };
   const mt = makeMockTransport(() => jsonResponse(body));
   const e = new RequestEngine({ transport: mt.transport });
   await assert.rejects(
     () => e.postJson("/x", {}, { username: "TOK" }),
-    (err) => err instanceof DestatisApiError && !err.message.includes(ESC) && /cleantext/.test(err.message),
+    (err) => err instanceof DestatisApiError && !err.message.includes(ESC) && /: clean ext$/.test(err.message),
   );
 });
 
@@ -341,7 +353,8 @@ test("strips terminal control characters from the echoed Content-Type (GEN-03)",
   const e = new RequestEngine({ transport: mt.transport });
   const res = await e.postRaw("/data/tablefile", "application/zip", { name: "1" }, { username: "TOK" });
   assert.ok(!res.contentType.includes(ESC));
-  assert.equal(res.contentType, "application/zip[31m");
+  // The whole escape sequence is dropped, not only its ESC.
+  assert.equal(res.contentType, "application/zip");
 });
 
 test("does not surface an HTML error page as the detail (noise)", async () => {
@@ -1003,4 +1016,88 @@ test("an answer longer than V8's longest string is a DestatisParseError naming t
   // An error status with such a body is still the API error, without the unreadable body.
   const failing = new RequestEngine({ maxResponseBytes: 0, maxRetries: 0, transport: makeMockTransport(() => rawResponse(huge, "application/json", 500)).transport });
   await assert.rejects(failing.postJson("/find/find", {}, {}), (err: unknown) => err instanceof DestatisApiError && err.httpStatus === 500 && err.body === "");
+});
+
+test("sanitizeServerText drops whole escape sequences, not just their control bytes", () => {
+  const CSI8 = String.fromCharCode(0x9b);
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  for (const [input, expected] of [
+    [`line1 ${ESC}]0;title${BEL}rest`, "line1 rest"],
+    [`${ESC}]8;;https://evil.example${ESC}\\click${ESC}]8;;${ESC}\\`, "click"],
+    [`${ESC}[31mred${ESC}[0m plain`, "red plain"],
+    [`${ESC}[1;31;4mbold`, "bold"],
+    [`${CSI8}2Jcleared`, "cleared"],
+    [`${OSC8}0;t${ST8}ok`, "ok"],
+    [`a${ESC}7b${ESC}(Bc`, "abc"],
+    // Unterminated: only ESC and its introducer go, the text stays.
+    [`keep ${ESC}]0;no terminator here`, "keep 0;no terminator here"],
+  ] as const) {
+    assert.equal(sanitizeServerText(input), expected, JSON.stringify(input));
+  }
+});
+
+test("sanitizeServerText reads a bounded prefix and drops what the per-character filter dropped", () => {
+  // The kit's per-character filter, one character at a time: C0 but TAB to CR, DEL, C1 and Cf
+  // go (this repo's own dropped only the bidi controls of Cf).
+  const perCharacter = (text: string): string =>
+    [...text]
+      .filter((ch) => {
+        const n = ch.codePointAt(0) ?? 0;
+        return (n >= 0x09 && n <= 0x0d) || !(n <= 0x1f || (n >= 0x7f && n <= 0x9f) || /\p{Cf}/u.test(ch));
+      })
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
+  const every = Array.from({ length: 0x3000 }, (_, i) => String.fromCharCode(i)).join("") + "\u{1f600}\u{e0001}\ud800x";
+  for (let at = 0; at < every.length; at += 512) {
+    const piece = every.slice(at, at + 512).replace(/[\u001b\u0090\u0098\u009b-\u009f]/g, "");
+    assert.equal(sanitizeServerText(piece), perCharacter(piece), `from U+${at.toString(16)}`);
+  }
+  // At most 16 384 units of the text are read, never half a surrogate pair.
+  assert.equal(sanitizeServerText("x".repeat(100_000)).length, 16_384);
+  assert.equal(sanitizeServerText(`${"x".repeat(16_383)}\u{1f600}`), "x".repeat(16_383));
+  // A control string ends at another introducer: the first is dropped by the filter, the second
+  // string as a whole.
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  assert.equal(sanitizeServerText(`a${OSC8}0;x${OSC8}0;t${ST8}b`), "a0;xb");
+  assert.equal(sanitizeServerText(`a${ESC}]0;x${ESC}]0;t${BEL}b`), "a0;xb");
+});
+
+test("a TextBuilder joins its pieces in order across batches", () => {
+  const b = new TextBuilder();
+  const expected: string[] = [];
+  for (let i = 0; i < 40_000; i++) {
+    b.push(String(i), ",");
+    expected.push(String(i), ",");
+  }
+  assert.equal(b.toString(), expected.join(""));
+  assert.equal(new TextBuilder().toString(), "");
+});
+
+test("a plain-text error body is quoted from its head only, cleaned and cut", async () => {
+  // The snippet of a text body was collapsed over the whole body before its cut.
+  const body = `pDirectory is null ${ESC}]0;t${BEL}${"x ".repeat(8_000_000)}`;
+  const e = new RequestEngine({ transport: async () => rawResponse(body, "text/plain", 500), maxRetries: 0 });
+  const err = await e.getJson("/helloworld/whoami").catch((caught: unknown) => caught);
+  assert.ok(err instanceof DestatisApiError, String(err));
+  assert.match(err.message, /^HTTP 500 for GET \S+: pDirectory is null x x /);
+  assert.ok(err.message.length < 400, String(err.message.length));
+  assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(err.message));
+});
+
+// This test starts a process with a small heap: 30 s instead of the suite's 5 s.
+const STARTS_A_PROCESS = { timeout: 30_000 };
+
+test("scanNumbers quotes millions of declared members within a small heap", STARTS_A_PROCESS, () => {
+  // One `+=` per quoted member made a rope node each: 3 million of them exhausted a 128 MB heap.
+  const engine = new URL("../src/engine.js", import.meta.url).href;
+  const n = 3_000_000;
+  const script =
+    `const { scanNumbers } = await import(${JSON.stringify(engine)});` +
+    `const json = "[" + '{"k":1},'.repeat(${n - 1}) + '{"k":1}]';` +
+    `process.stdout.write(String(scanNumbers(json, new Set(["k"])).json.length));`;
+  const out = execFileSync(process.execPath, ["--max-old-space-size=128", "--input-type=module", "-e", script], { encoding: "utf8" });
+  assert.equal(out, String(n * 10 + 1));
 });
