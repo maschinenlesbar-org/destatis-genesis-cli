@@ -193,7 +193,9 @@ What the library rejects:
   the userinfo of every
   URL in an argument (`credentialsIn`, exported, parseable or not) with `***@` — only a
   URL with a scheme counts (a bare `a:b@c` is a file name, a search text or a User-Agent
-  as often as a credential), except as the `--base-url` value; it is found anywhere in an
+  as often as a credential), except as the `--base-url` value; the userinfo is read where
+  WHATWG reads it: after any slashes and backslashes a special scheme skips (`http:///u:pw@h`,
+  `https:\\u:pw@h`, `http:u:pw@h`), up to a backslash too for such a scheme; it is found anywhere in an
   argument (`urlsWithin`: each `://` found with indexOf and its scheme by walking back, so
   the search is linear; at most 64 per argument), since the library sends a text trimmed and
   a padded, dash-led or mid-phrase URL reached a refusal, a server's echo of the term and
@@ -212,8 +214,13 @@ What the library rejects:
   unless it reads like a command name — that is where a secret typed without its
   flag lands.
 - **Base URL** (`baseUrlProblem`, run by the engine constructor on the raw
-  `baseUrl` before the trailing-slash strip): an unparsable URL, a scheme other
-  than `http:`/`https:`, embedded userinfo (`https://u:p@host` would become a Basic
+  `baseUrl`, which then requests it as it parses: `new URL(baseUrl).href` without trailing
+  slashes, host lower-cased, a default port dropped, so a transport that reads the URL as text
+  reaches the host every check named): an unparsable URL, a scheme other
+  than `http:`/`https:`, a backslash (WHATWG ends an http(s) host at one, text-based code
+  reads on: `https://h.example\@other.example`), a scheme not followed by exactly `//` and
+  the host (`http:host`, `http:/host`, `http:///host`, which WHATWG repairs silently into
+  another URL), embedded userinfo (`https://u:p@host` would become a Basic
   `Authorization` header; GENESIS never uses Basic auth), a query or fragment
   (request paths are appended as a string, so `?`/`#` would swallow them),
   surrounding whitespace (`"https://h/ "` requested `/%20/…`), and whitespace or
