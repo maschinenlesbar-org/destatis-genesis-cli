@@ -549,7 +549,10 @@ for every transport (P5):
   transport passes on) and the engine rejects with `DestatisNetworkError` at the
   deadline whether the transport stops or not.
 - **`maxResponseBytes`** — checked again on the body the transport hands back
-  (`sizeLimitMessage` names the option and `--max-response-bytes`).
+  (`sizeLimitMessage` names the option and `--max-response-bytes`). The default transport
+  joins small chunks as they arrive (`COALESCE_CHUNKS`, 1024, or `COALESCE_BYTES`, 64 KiB), so
+  the memory an answer holds follows its bytes, not the number of transfer-encoding chunks a
+  server splits it into (a Buffer per one-byte chunk held about 210 bytes of heap).
 - **Response shape** — `headers` may be a `Headers` object, a `Map` or a record with
   names in any case (`plainHeaders`), so `Retry-After` and `Content-Type` are read;
   `body` may be any `ArrayBuffer` view or `ArrayBuffer`, from any realm (`bodyBytes`).
@@ -627,7 +630,7 @@ value goes into a path), P25
 the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors),
 P27 big and odd answers (a large flat answer prints with `--compact` under a small heap, an answer
 full of DEL characters prints escaped or, past V8's longest string, is an ERROR record of
-`destatis.output`; it starts the built bin with `--max-old-space-size`, 30 s) and
+`destatis.output`, an answer in two million one-byte chunks is read within a 256 MB heap; it starts the built bin with `--max-old-space-size`, 30 s) and
 P26 `-o` integrity (a write cut short under `ulimit -f` leaves the old file and nothing else;
 an existing target and a missing directory are refused before any request; `/dev/null` and a
 FIFO are written in place; `--force` through a dangling link creates the file it names; a
