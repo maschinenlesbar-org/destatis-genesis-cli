@@ -51,6 +51,8 @@ const outputArgv = (file: string, force: boolean): string[] => [
 ];
 /** A 2xx answer for that download: a file (not JSON by its type), which the CLI writes as it is. */
 const answer = () => rawResponse('[{"id":"a1"}]', "application/zip");
+/** What the CLI writes to the file for that answer, parsed as JSON (read back after a followed link). */
+const written: unknown = [{ id: "a1" }];
 /** The exit code of a usage error in this repo (commander's default is 1; most repos use 2). */
 const USAGE_EXIT = 2;
 // --------------------------------------------------------------------------------------
@@ -153,7 +155,7 @@ test("P30: --force still follows the caller's own links, the directory owner's, 
     try {
       const o = await runWith(nodeFilesFor(who(t)), outputArgv(t.link, true));
       assert.equal(o.code, 0, `${label}: ${o.err}`);
-      assert.deepEqual(JSON.parse(readFileSync(t.victim, "utf8")), [{ id: "a1" }], label);
+      assert.deepEqual(JSON.parse(readFileSync(t.victim, "utf8")), written, label);
       assert.ok(lstatSync(t.link).isSymbolicLink(), label);
     } finally {
       t.done();
