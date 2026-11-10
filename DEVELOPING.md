@@ -297,6 +297,11 @@ What the library rejects:
   A guest client reaches this only from the library; the CLI refuses `--guest` on
   those commands first. `whoami()` and `find()` work in either mode.
 
+  A base URL (`--base-url`, and the environment variable where the CLI reads one) is read as
+  a URL however its scheme is typed (`typedUrlCredentials`): missing (`alice:pw@host`) or
+  mistyped (`http//alice:pw@host`, the colon left out, whose userinfo is everything between the
+  first slashes and the last `@`), so commander's echo of a refused one shows no password.
+
 Every value is sent without surrounding whitespace and in Unicode NFC (P11, D8; `canonical` in
 `client.ts`): the `find` term by `normalizeText`, the object `name` and every other string
 parameter by `normalizeToken` (both exported: `trim()` then NFC; inner whitespace kept), and

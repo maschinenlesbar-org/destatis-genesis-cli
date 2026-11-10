@@ -8,7 +8,7 @@
 
 import http from "node:http";
 import https from "node:https";
-import { DestatisNetworkError, credentialsIn, redactCredentials } from "./errors.js";
+import { DestatisNetworkError, credentialsIn, redactCredentials, typedUrlCredentials } from "./errors.js";
 
 export interface HttpRequest {
   method: string;
@@ -88,7 +88,7 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
  */
 function shownUrl(url: string): string {
   const typed = credentialsIn(url);
-  return redactCredentials(url, typed.length > 0 ? typed : credentialsIn(`http://${url}`));
+  return redactCredentials(url, typed.length > 0 ? typed : typedUrlCredentials(url));
 }
 
 /**
