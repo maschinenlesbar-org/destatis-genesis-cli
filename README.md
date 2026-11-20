@@ -20,6 +20,59 @@ npm install -g @maschinenlesbar.org/destatis-genesis-cli
 
 This installs the **`destatis`** command. Requires **Node.js 22.12+**.
 
+### Docker
+
+From 0.10.0 every release is also a container image for linux/amd64 and linux/arm64 on the
+GitHub Container Registry, made from the same tarball as the npm package. It needs no Node.js and no
+install. Pass the login through the environment (the image has no credentials file):
+
+```bash
+docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+  -e DESTATIS_API_TOKEN ghcr.io/maschinenlesbar-org/destatis-genesis-cli:latest data table 12411-0001 --start-year 2020
+```
+
+The image's entrypoint is the program, so the command follows the image name directly;
+`… destatis-genesis-cli:latest destatis data table …` works too.
+
+In a container with a memory limit (`--memory`) the default `--max-response-bytes` is an eighth
+of that limit (at most the usual 100 MiB), so an oversized answer is refused with a clear
+error instead of the container being killed for memory. The CLI needs at least 12 processes and
+threads (`--pids-limit 12`): below that it refuses with an error, and with 4 or fewer Node.js
+itself hangs before the CLI can check.
+
+`latest` is the newest release. For scripts, name a release and pin its digest, which the
+[release notes](https://github.com/maschinenlesbar-org/destatis-genesis-cli/releases) give:
+`…/destatis-genesis-cli:0.10.0@sha256:<digest>`. Each image carries signed build provenance;
+check it with
+
+```bash
+gh attestation verify oci://ghcr.io/maschinenlesbar-org/destatis-genesis-cli:latest \
+  --repo maschinenlesbar-org/destatis-genesis-cli
+```
+
+### MCP server
+
+From 0.10.0 GENESIS is also an [MCP](https://modelcontextprotocol.io/) server for AI agents,
+`@maschinenlesbar.org/destatis-genesis-mcp` (command `destatis-mcp`, image
+`ghcr.io/maschinenlesbar-org/destatis-genesis-mcp`): five read-only tools, to fetch a table's
+figures narrowed by years, region and classifying variables and decoded from GENESIS's German
+number format, turn a topic into object codes, get a table as flat, spreadsheet-ready rows,
+describe an object's dimensions and time span, and browse codes by pattern, on stdio or Streamable
+HTTP. The tools handle the skills' traps: "nothing found" answered as success (the tools say
+whether the code doesn't exist or the selection excluded everything), value symbols that are not 0,
+tables too large for a direct fetch. The server takes your login from `DESTATIS_API_TOKEN` (or
+`DESTATIS_USERNAME` and `DESTATIS_PASSWORD`), else the one stored with `destatis config set`, never
+from its command line; over HTTP it requires a bearer token (`--auth-token-file`), so your account
+never becomes an open endpoint. Setup for Claude Code, Claude Desktop and VS Code:
+[MCP.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/MCP.md).
+
+```bash
+npm i -g @maschinenlesbar.org/destatis-genesis-mcp
+claude mcp add destatis -- destatis-mcp
+```
+
+Every result carries the data licence (dl-de/by-2-0) and the source label to quote.
+
 ## Credentials
 
 GENESIS needs a **free registered account** — register at
@@ -224,3 +277,4 @@ npm run typecheck
 ```
 
 See [DEVELOPING.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/DEVELOPING.md) for architecture and API specifics.
+[MCP.md](https://github.com/maschinenlesbar-org/destatis-genesis-cli/blob/main/MCP.md) covers the same use cases as the tools of the MCP server, for any MCP client.
