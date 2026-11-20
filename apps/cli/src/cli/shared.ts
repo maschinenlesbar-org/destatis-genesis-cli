@@ -7,9 +7,10 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { OutputError, OutputTargetError, isDirectoryMessage, logOf, reasonOf, refuseOverwrite, type CliDeps, type FileState } from "./io.js";
 import { CredentialsFileError } from "./credentials.js";
+import { pidsProblem, responseCapFor } from "./limits.js";
 import { cleartextProblem, DEFAULT_BASE_URL, isBidiControl, type RawResponse, type RetryEvent } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
 import type { DestatisClientOptions } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
-import { DestatisUsageError, DestatisValidationError, cutForMessage, quoteValue } from "@maschinenlesbar.org/destatis-genesis-client/internal/errors";
+import { DestatisError, DestatisUsageError, DestatisValidationError, cutForMessage, quoteValue } from "@maschinenlesbar.org/destatis-genesis-client/internal/errors";
 import {
   BASE_URL_USERINFO_PROBLEM,
   GUEST_WITH_CREDENTIALS_PROBLEM,
@@ -29,6 +30,10 @@ import {
   type Problem,
 } from "@maschinenlesbar.org/destatis-genesis-client/internal/validate";
 import type { Language } from "@maschinenlesbar.org/destatis-genesis-client/internal/params";
+
+
+/** The container can't run the CLI as it is limited (limits.ts): an ERROR record of the cli area and exit 1. */
+export class EnvironmentError extends DestatisError {}
 
 /**
  * commander value-parser: a non-negative integer in plain decimal notation.
@@ -772,11 +777,21 @@ export function action(
     const root = rootCommand(command);
     // A refused -o target is a usage error before anything else happens.
     checkOutputTarget(deps, global);
+    // In a container: under a pids limit Node can't work with, refuse before any request; under a
+    // memory limit the 100 MiB default can't be held, so cap by the memory instead (an oversized
+    // answer is then the cap's error, not an OOM kill). An explicit --max-response-bytes wins.
+    const limits = deps.limits?.() ?? {};
+    const problem = pidsProblem(limits);
+    if (problem !== undefined) throw new EnvironmentError(problem);
+    const given = command.getOptionValueSourceWithGlobals("maxResponseBytes");
+    const memory = given === undefined || given === "default" ? limits.memoryBytes : undefined;
+    const capped = (options: DestatisClientOptions): DestatisClientOptions =>
+      memory === undefined ? options : { ...options, maxResponseBytes: responseCapFor(memory) };
     checkGuestAlone(global, root);
     // A command that sends no credentials (`hello`) neither reads nor checks them, so
     // a malformed or half-set variable can't stop it. It always runs as guest.
     if (options.credentials === false) {
-      const client = createClient(deps, { ...toClientOptions(global, { present: false }), guest: true });
+      const client = createClient(deps, capped({ ...toClientOptions(global, { present: false }), guest: true }));
       warnArgvCredentials(deps, command);
       warnCleartext(deps, global, { present: false });
       await fn({ client, global, opts: command.opts() }, positionals);
@@ -813,7 +828,7 @@ export function action(
     // A token together with a username or password (from any source), no credentials
     // without --guest, or half a username/password pair: the library refuses, and the
     // error is reworded here (exit 2, before any request).
-    const client = createClient(deps, toClientOptions(global, creds), credentialSourceNames(creds, sources), fromFile);
+    const client = createClient(deps, capped(toClientOptions(global, creds)), credentialSourceNames(creds, sources), fromFile);
     if (creds.present) warnArgvCredentials(deps, command);
     warnCleartext(deps, global, creds);
     await withCredentialsHint(() => fn({ client, global, opts: command.opts() }, positionals));

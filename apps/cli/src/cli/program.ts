@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Command, InvalidArgumentError, Option } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
+import { readContainerLimits } from "./limits.js";
 import { DestatisClient } from "@maschinenlesbar.org/destatis-genesis-client/internal/client";
 import { MAX_TIMEOUT_MS } from "@maschinenlesbar.org/destatis-genesis-client/internal/http";
 import { MAX_RETRIES } from "@maschinenlesbar.org/destatis-genesis-client/internal/engine";
@@ -57,6 +58,8 @@ export const defaultDeps: CliDeps = {
   createClient: (options) => new DestatisClient(options),
   env: process.env,
   credentials: () => CredentialStore.fromEnv(process.env),
+  // In a container: the memory and pids limits (cgroup), for action()'s checks.
+  limits: () => readContainerLimits(),
 };
 
 /**
