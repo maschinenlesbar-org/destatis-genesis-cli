@@ -1,0 +1,57 @@
+{
+  "comment": "What tools/image/smoke.mjs needs that is particular to this repo: the bin (its log topic), a command that makes one request, the exit code of a network error, the mock's answer to that request (by path, under --base-url http://mock:8080; recorded live 2026-11-20 as GENESIS's guest user and cut to the tables), and a string the printed answer contains. The command searches as the guest user (--guest), so it needs no login. authToken: the MCP server serves HTTP only with a bearer token (it uses a personal account), so its HTTP checks get a token file.",
+  "bin": "destatis",
+  "command": [
+    "--compact",
+    "--guest",
+    "find",
+    "Bevölkerungsstand",
+    "--category",
+    "tables",
+    "--pagelength",
+    "2"
+  ],
+  "networkErrorExit": 1,
+  "answers": {
+    "/genesisWS/rest/2020/find/find": {
+      "Ident": {
+        "Service": "find",
+        "Method": "find"
+      },
+      "Status": {
+        "Code": 0,
+        "Content": "erfolgreich",
+        "Type": "Information"
+      },
+      "Parameter": {
+        "username": "********************",
+        "password": "********************",
+        "term": "Bevölkerungsstand",
+        "category": "Tabellen",
+        "pagelength": "2",
+        "language": "de"
+      },
+      "Cubes": null,
+      "Statistics": null,
+      "Tables": [
+        {
+          "Code": "12411-0001",
+          "Content": "Bevölkerung: Deutschland, Stichtag",
+          "Time": "",
+          "Valid": "true"
+        },
+        {
+          "Code": "12411-0002",
+          "Content": "Bevölkerung: Deutschland, Stichtag, Nationalität",
+          "Time": "",
+          "Valid": "true"
+        }
+      ],
+      "Timeseries": null,
+      "Variables": null,
+      "Copyright": "© Statistisches Bundesamt (Destatis), 2026"
+    }
+  },
+  "expectStdout": "Bevölkerung: Deutschland, Stichtag",
+  "authToken": true
+}
