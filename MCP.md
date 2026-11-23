@@ -137,7 +137,9 @@ run GENESIS's batch jobs.
   and other web pages. Exposed beyond localhost (it logs a warning then), it belongs behind a TLS
   proxy.
 - **Gentle with the upstream.** One server process sends at most 2 requests at a time (GENESIS
-  allows about three per account) and 120 a minute to the API, pauses on HTTP 429 (as long as its Retry-After asks, at most 30 s), and stops a tool call after its deadline.
+  allows about three per account) and 120 a minute to the API, pauses on HTTP 429 (as long as its Retry-After asks, at most 30 s), and stops a tool call after its deadline. A request those limits would hold longer
+  than it or its call may wait is not sent: the call fails at once, naming the limit and when to
+  ask again (and the log says so).
 - **Results are data.** Text from the API is cleaned (control, bidi and zero-width characters
   removed), but it is still other people's text: a model can be told things in it. The server
   can't act on that (it has no tool that writes), but other tools in the same session could.
