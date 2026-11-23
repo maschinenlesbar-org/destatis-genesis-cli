@@ -728,7 +728,9 @@ to give one, and the next call looks again. Not at start: the handshake, the too
 image's smoke test and the tests that start the bin need no login. One INFO record of
 `destatis-mcp.config` names the source, never a value; the token, username and password are
 secrets from then on, replaced with `***` in every record the server logs, every result and every
-error message. The server has no option for the login (argv shows in `ps`) and no guest mode (`api.ts`'s
+error message (`Secrets` in the kit's `credentials.ts`: a value under 16 characters only as a whole
+occurrence, not inside a run of letters and digits of any script, as the client's `redactSecrets`
+does; a longer one, a token, wherever it stands). The server has no option for the login (argv shows in `ps`) and no guest mode (`api.ts`'s
 `CHECK_CLIENT_OPTIONS = { guest: true }` only lets the kit's `config.ts` build a client at start to
 check `--base-url` and `--user-agent`, so a value the client's constructor refuses is a usage error, exit 2). A
 login GENESIS refuses (HTTP 404 with GENESIS code 2, 401 with code 15) is a tool error that says
