@@ -75,7 +75,7 @@ DESTATIS_API_TOKEN ghcr.io/maschinenlesbar-org/destatis-genesis-mcp:latest`.
 account for whoever reaches it, so it **refuses to start without `--auth-token-file <path>`** and
 then answers only requests that send that bearer token (`Authorization: Bearer <token>`; anything
 else is 401). The file holds one token of at least 32 characters, mode 600, owned by the user the
-server runs as; it is read once, at start, and the token is never logged:
+server runs as, a regular file (a FIFO is refused at once, never waited on); it is read once, at start, and the token is never logged:
 
 ```bash
 (umask 077; openssl rand -hex 32 > ~/.config/destatis-genesis/mcp-token)
