@@ -134,7 +134,8 @@ run GENESIS's batch jobs.
 - **HTTP only with a bearer token** (see above): your GENESIS account must not become an open
   endpoint. It listens on loopback by default; it checks the `Host` header and, from a browser, the
   `Origin` (only the origins given with `--allowed-origins`, matched exactly) against DNS rebinding
-  and other web pages. Exposed beyond localhost (it logs a warning then), it belongs behind a TLS
+  and other web pages; a page on one of those origins gets CORS (its preflight answered, the
+  answers readable). Exposed beyond localhost (it logs a warning then), it belongs behind a TLS
   proxy.
 - **Gentle with the upstream.** One server process sends at most 2 requests at a time (GENESIS
   allows about three per account) and 120 a minute to the API, pauses on HTTP 429 (as long as its
