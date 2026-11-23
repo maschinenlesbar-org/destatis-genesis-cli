@@ -1,6 +1,6 @@
 {
   "name": "@maschinenlesbar.org/destatis-genesis-mcp",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "MCP server for GENESIS-Online, the official statistics of Destatis, for AI agents (stdio and Streamable HTTP)",
   "type": "module",
   "bin": {
