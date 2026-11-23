@@ -730,7 +730,7 @@ image's smoke test and the tests that start the bin need no login. One INFO reco
 secrets from then on, replaced with `***` in every record the server logs, every result and every
 error message. The server has no option for the login (argv shows in `ps`) and no guest mode (`api.ts`'s
 `CHECK_CLIENT_OPTIONS = { guest: true }` only lets the kit's `config.ts` build a client at start to
-check `--base-url`, so a value the client's constructor refuses is a usage error, exit 2). A
+check `--base-url` and `--user-agent`, so a value the client's constructor refuses is a usage error, exit 2). A
 login GENESIS refuses (HTTP 404 with GENESIS code 2, 401 with code 15) is a tool error that says
 to check the login and restart, never "not found" (`withHints` in `tools.ts`).
 

@@ -41,7 +41,7 @@ export function apiBase(baseUrl: string | undefined): string {
 /**
  * The client refuses to be built without a login; `guest: true` builds one without. The kit
  * (config.ts) builds such a client once at start, only to check the options the server passes to
- * every client (`--base-url`); the server itself never runs as guest.
+ * every client (`--base-url`, `--user-agent`); the server itself never runs as guest.
  */
 export const CHECK_CLIENT_OPTIONS = { guest: true };
 
