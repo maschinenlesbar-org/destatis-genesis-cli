@@ -42,6 +42,30 @@ test("fetchData: the CSV decoded, German numbers as numbers; source names the re
   await connection.close();
 });
 
+test("source cites the request GENESIS got: values trimmed and composed as the client sends them, not the raw arguments", async () => {
+  const upstream = mockGenesis();
+  const connection = await connect({ transport: upstream });
+  const sentAsCited = (source: unknown): void => {
+    const cited = new URL(String(source)).searchParams;
+    const sent = bodyOf(upstream.last());
+    assert.ok([...cited.keys()].length > 0);
+    for (const [key, value] of cited) assert.equal(value, sent.get(key), `${key} in ${String(source)}`);
+  };
+  const found = await connection.call("findStatistics", { term: "  Bevo\u0308lkerung  " });
+  assert.match(String(found.structuredContent?.["source"]), /\?term=Bev%C3%B6lkerung&/);
+  sentAsCited(found.structuredContent?.["source"]);
+  const described = await connection.call("describeObject", { code: " 12411-0001 " });
+  assert.match(String(described.structuredContent?.["source"]), /\?name=12411-0001$/);
+  sentAsCited(described.structuredContent?.["source"]);
+  const data = await connection.call("fetchData", { code: "12411-0001", regionVariable: " DLAND ", regionKey: " 09 ", contents: " BEVSTD , X " });
+  sentAsCited(data.structuredContent?.["source"]);
+  const odd = await connection.call("fetchData", { code: "12411-0001;DROP\n" });
+  assert.match(String(odd.structuredContent?.["source"]), /\/data\/table\?name=12411-0001%3BDROP$/);
+  const browsed = await connection.call("browseCatalogue", { selection: " 12411* " });
+  sentAsCited(browsed.structuredContent?.["source"]);
+  await connection.close();
+});
+
 test("fetchData: a code GENESIS doesn't know is empty, checked against the metadata; with a selection, the selection is blamed", async () => {
   const upstream = mockGenesis();
   const connection = await connect({ transport: upstream });
