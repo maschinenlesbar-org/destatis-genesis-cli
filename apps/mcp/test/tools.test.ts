@@ -15,7 +15,7 @@ import { listTools } from "../src/mcp/server.js";
 import { INSTRUCTIONS, LICENCE } from "../src/mcp/tools.js";
 import { PROGRAM } from "../src/mcp/version.js";
 import { connect, noUpstream, recorder } from "./harness.js";
-import { bodyOf, endpointOf, EMPTY_104, FIND_ALL, FIND_NONE, genesis, jsonResponse, mockGenesis, TEST_TOKEN } from "./helpers.js";
+import { bodyOf, endpointOf, EMPTY_104, FFCSV_12411_0001, FIND_ALL, FIND_NONE, genesis, jsonResponse, mockGenesis, rawResponse, TEST_TOKEN, zipOf } from "./helpers.js";
 
 const records = (lines: string[]) => lines.join("\n");
 
@@ -114,6 +114,30 @@ test("getFlatTable: the flat CSV unpacked from the download's ZIP, as columns an
   assert.match(String(answer["source"]), /\/data\/tablefile\?name=12411-0001&format=ffcsv$/);
   const missing = await connection.call("getFlatTable", { code: "99999-9999" });
   assert.equal(missing.structuredContent?.["status"], "empty");
+  await connection.close();
+});
+
+test("getFlatTable under a low size cap: rows go from the end, the column names stay whole", async () => {
+  // Thirteen column names are a longer list than four or five rows: the cap must still take the
+  // rows (the page), never the header every row is read against.
+  const header = FFCSV_12411_0001.split("\n")[0] as string;
+  const row = (i: number) => `12411;Fortschreibung des Bevölkerungsstandes;STAG;Stichtag;${2019 + i}-12-31;DINSG;Deutschland insgesamt;DG;Deutschland;8466932${i};Anzahl;BEVSTD;Bevölkerungsstand ${"x".repeat(120)}`;
+  const csv = [header, ...[0, 1, 2, 3, 4].map(row)].join("\n");
+  const connection = await connect({
+    transport: mockGenesis({ "data/tablefile": () => rawResponse(zipOf({ "12411-0001_flat.csv": csv }), "application/zip") }),
+    config: { maxResultChars: 2000 },
+  });
+  const result = await connection.call("getFlatTable", { code: "12411-0001", limit: 5 });
+  const answer = result.structuredContent ?? {};
+  assert.equal(answer["status"], "ok", result.content[0]?.text);
+  assert.equal((answer["columns"] as string[]).length, 13, "every column name kept");
+  assert.equal((answer["columns"] as string[])[9], "value");
+  const rows = answer["rows"] as string[][];
+  assert.ok(rows.length >= 1 && rows.length < 5, String(rows.length));
+  for (const kept of rows) assert.equal(kept.length, 13);
+  assert.equal(answer["nextOffset"], rows.length);
+  assert.equal(answer["truncated"], true);
+  assert.ok(JSON.stringify(answer).length <= 2000);
   await connection.close();
 });
 
