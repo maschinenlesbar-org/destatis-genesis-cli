@@ -116,8 +116,9 @@ mark) or, when that isn't enough, its other lists shortened (`reason` names them
 first entry, `notes` stay whole, and the answer says `truncated`. One that can't be cut down so far is a tool error that says
 to ask for less. A failure is a tool error that says what to change (one over 5000 characters loses its middle, never
 its end, where the reason is). A table too large
-for a direct fetch is refused by GENESIS (status 98): narrow it; this server, like the CLI, doesn't
-run GENESIS's batch jobs.
+for a direct fetch is refused by GENESIS (status 98): narrow it (the error names the tool's own arguments: years,
+region or class keys for the data tools, the term or the code pattern and `limit` for a search or a catalogue); this
+server, like the CLI, doesn't run GENESIS's batch jobs.
 
 ## Options
 
