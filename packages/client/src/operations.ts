@@ -169,14 +169,25 @@ export const VALUE_SYMBOLS: Readonly<Record<string, string>> = {
   s: "estimated",
 };
 
-/** A German-format number (`84.669.326`, `1.234,5`, `-0,8`), or undefined for anything else. */
+/** The most significant digits any number with a fraction holds exactly (a double keeps 15). */
+const EXACT_DIGITS = 15;
+
+/**
+ * A German-format number (`84.669.326`, `1.234,5`, `-0,8`), or undefined for anything else, and
+ * for a figure with more digits than a number holds exactly (a whole number beyond 2^53 − 1, or
+ * over 15 significant digits with a fraction): that stays text rather than come back with other
+ * digits than GENESIS sent.
+ */
 export function germanNumber(text: string): number | undefined {
   const cell = text.trim();
   // Thousands dots in groups of three, an optional decimal comma; no leading zero (a key like 01
   // or 0100 stays text), no plain dot decimal (1.5 is not German and stays text).
   if (!/^[-+]?(0|[1-9]\d{0,2}(\.\d{3})*|[1-9]\d*)(,\d+)?$/.test(cell)) return undefined;
   const value = Number(cell.replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(value) ? value : undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (!cell.includes(",")) return Number.isSafeInteger(value) ? value : undefined;
+  const digits = cell.replace(/[^0-9]/g, "").replace(/^0+/, "").replace(/0+$/, "");
+  return digits.length <= EXACT_DIGITS ? value : undefined;
 }
 
 /** A cell as the answer gives it: the number for a German-format number, else the text as sent. */
