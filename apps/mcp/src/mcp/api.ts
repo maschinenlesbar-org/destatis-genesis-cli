@@ -38,6 +38,13 @@ export function apiBase(baseUrl: string | undefined): string {
   return `${(baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "")}${API_PATH}`;
 }
 
+/**
+ * The client refuses to be built without a login; `guest: true` builds one without. The kit
+ * (config.ts) builds such a client once at start, only to check the options the server passes to
+ * every client (`--base-url`); the server itself never runs as guest.
+ */
+export const CHECK_CLIENT_OPTIONS = { guest: true };
+
 /** The server calls GENESIS with a personal account: HTTP only with a bearer token (auth.ts). */
 export const HTTP_NEEDS_AUTH_TOKEN = true;
 
