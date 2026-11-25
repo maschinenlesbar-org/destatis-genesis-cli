@@ -256,7 +256,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     description: [
       'Turn a topic into GENESIS object codes. Use it for "welche Destatis-Tabelle hat die Bevölkerung nach Bundesland?", "Statistik zu Arbeitslosen finden", "EVAS-Code für das BIP", "which Destatis table has population by state?", "find official statistics on unemployment", "search GENESIS for CO2 emissions".',
       "GENESIS's full-text search: matches lists type (table, statistic, cube, timeseries, variable), code and title. category tables (the default) gives the usable 2-D views; statistics gives the EVAS statistics (12411) whose tables browseCatalogue lists (12411*); all searches every type. The codes are what fetchData, getFlatTable and describeObject take.",
-      "Traps: search in German for the best hits (Bevölkerung, Arbeitslose, Treibhausgase). No hit is status empty, not an error: broaden the word or use category all. Titles are cut by GENESIS (\"Hauptwohnsitzhaush.\"); confirm the right table with describeObject before fetching. limit caps each type's list.",
+      "Traps: search in German for the best hits (Bevölkerung, Arbeitslose, Treibhausgase). No hit is status empty, not an error: broaden the word or use category all. Titles are cut by GENESIS (\"Hauptwohnsitzhaush.\"); confirm the right table with describeObject before fetching. limit caps each type's list: complete false means a list reached it and more may exist (raise limit or narrow the term).",
       RULES,
     ].join("\n\n"),
     inputSchema: input(
@@ -268,7 +268,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       },
       ["term"],
     ),
-    outputSchema: output({ matches: arr, perTypeLimit: int }),
+    outputSchema: output({ matches: arr, perTypeLimit: int, complete: { type: "boolean" } }),
     source: (args) => sourceOf("find/find", { term: str(args, "term"), category: str(args, "category") ?? "tables", pagelength: num(args, "limit") ?? 20, language: str(args, "language") }),
     async run(args, context) {
       return cited(

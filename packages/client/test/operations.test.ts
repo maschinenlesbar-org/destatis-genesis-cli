@@ -226,6 +226,17 @@ test("titles from long runs of whitespace are put on one line in linear time, th
   assert.equal(described.title, `Bevölkerung${spaces}x`);
 });
 
+test("findStatistics: a type's list as long as the limit is not complete, as in browseCatalogue; under it, complete", async () => {
+  const at = await findStatistics(clientFor(() => jsonResponse(FIND_TABLES)).client, { term: "Bevölkerung", limit: 5 });
+  assert.equal(at.status, "ok");
+  if (at.status !== "ok") return;
+  assert.equal(at.complete, false);
+  const under = await findStatistics(clientFor(() => jsonResponse(FIND_TABLES)).client, { term: "Bevölkerung", limit: 20 });
+  assert.equal(under.status, "ok");
+  if (under.status !== "ok") return;
+  assert.equal(under.complete, true);
+});
+
 test("browseCatalogue: a code pattern lists the matching tables; complete when under the limit", async () => {
   const { client, upstream } = clientFor(() => jsonResponse(TABLES_12411));
   const result = await browseCatalogue(client, { selection: "12411*" });

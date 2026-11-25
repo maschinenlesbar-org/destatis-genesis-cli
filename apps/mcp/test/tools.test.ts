@@ -154,6 +154,7 @@ test("findStatistics: codes and titles; no hit is empty with what was searched",
   const found = await connection.call("findStatistics", { term: "Bevölkerungsstand", category: "all", limit: 2 });
   assert.equal(found.structuredContent?.["status"], "ok", found.content[0]?.text);
   assert.equal((found.structuredContent?.["matches"] as unknown[]).length, 6);
+  assert.equal(found.structuredContent?.["complete"], false, "a type's list reached the limit of 2");
   assert.equal(found.structuredContent?.["source"], "https://genesis.destatis.de/genesisWS/rest/2020/find/find?term=Bev%C3%B6lkerungsstand&category=all&pagelength=2");
   const none = await connection.call("findStatistics", { term: "Xyzzyquux" });
   assert.equal(none.structuredContent?.["status"], "empty");
