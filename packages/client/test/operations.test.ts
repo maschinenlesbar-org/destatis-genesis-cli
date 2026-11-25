@@ -205,6 +205,27 @@ test("findStatistics: a decomposed umlaut is sent composed (NFC)", async () => {
   assert.equal(bodyOf(upstream.last()).get("term"), "Bevölkerung");
 });
 
+test("titles from long runs of whitespace are put on one line in linear time, the same as before", async () => {
+  const spaces = " ".repeat(60_000); // took seconds through the old pattern, quadratic in the run
+  const items = [
+    { Code: "12411-0001", Content: `Bevölkerung${spaces}x`, Time: "" },
+    { Code: "12411-0002", Content: "a \n \n b\n Stichtag\n Gemeinden \n", Time: "" },
+  ];
+  const answer = { ...TABLES_12411, List: items };
+  const started = Date.now();
+  const result = await browseCatalogue(clientFor(() => jsonResponse(answer)).client, { selection: "12411*" });
+  const meta = { ...METADATA_12411_0001, Object: { ...(METADATA_12411_0001.Object as Record<string, unknown>), Content: `Bevölkerung${spaces}x` } };
+  const described = await describeObject(clientFor(() => jsonResponse(meta)).client, { code: "12411-0001" });
+  assert.ok(Date.now() - started < 1000, `${Date.now() - started} ms`);
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.items[0]?.title, `Bevölkerung${spaces}x`);
+  assert.equal(result.items[1]?.title, "a b Stichtag Gemeinden ");
+  assert.equal(described.status, "ok");
+  if (described.status !== "ok") return;
+  assert.equal(described.title, `Bevölkerung${spaces}x`);
+});
+
 test("browseCatalogue: a code pattern lists the matching tables; complete when under the limit", async () => {
   const { client, upstream } = clientFor(() => jsonResponse(TABLES_12411));
   const result = await browseCatalogue(client, { selection: "12411*" });
