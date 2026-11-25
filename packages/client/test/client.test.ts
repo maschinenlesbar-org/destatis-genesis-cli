@@ -223,6 +223,20 @@ test("a refused value is quoted visibly: an invisible or format character is esc
   assert.equal(mt.calls.length, 0);
 });
 
+test("region and class keys are lists like contents: each item trimmed, an empty item refused, never sent", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.dataTable));
+  const c = new DestatisClient({ token: "0123456789abcdef0123456789abcdef", transport: mt.transport });
+  await c.data.table("12411-0001", { regionalvariable: "DLAND", regionalkey: "05, 09", classifyingvariable1: "GES", classifyingkey1: " GESM , GESW ", classifyingvariable5: "ALTX20", classifyingkey5: "ALT000B03,\tALT003B06" });
+  const body = bodyOf(mt.calls[0]!);
+  assert.equal(body.get("regionalkey"), "05,09");
+  assert.equal(body.get("classifyingkey1"), "GESM,GESW");
+  assert.equal(body.get("classifyingkey5"), "ALT000B03,ALT003B06");
+  for (const params of [{ regionalkey: "05,,09" }, { regionalkey: "05," }, { classifyingkey2: "," }, { classifyingkey3: "GESM, " }]) {
+    await assert.rejects(c.data.table("12411-0001", params), (err: Error) => err instanceof DestatisValidationError && /item \d of \d/.test(err.message), JSON.stringify(params));
+  }
+  assert.equal(mt.calls.length, 1);
+});
+
 test("codes and filter values go out trimmed and in NFC, a list item by item; an invisible character is refused (D8)", async () => {
   const mt = makeMockTransport(() => jsonResponse(fx.dataTable));
   const c = new DestatisClient({ token: "0123456789abcdef0123456789abcdef", transport: mt.transport });

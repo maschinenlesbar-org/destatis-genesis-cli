@@ -141,8 +141,9 @@ What the library rejects:
     `parseToken`): not blank in the same sense, no lone surrogate, no control or format
     character at all (a zero-width space, a soft hyphen, a bidi control only ever make a code
     match nothing — GENESIS then answers Status 104, "nothing found"); inner spaces are fine;
-  - `contents` is a comma-separated list (`splitList` + `listProblem`, CLI `parseList`): each
-    item is a code, and an empty item (`A,,B`, `A,`) refuses the whole list, naming the item.
+  - `contents`, `regionalkey` and `classifyingkey1..5` are comma-separated lists (`splitList` +
+    `listProblem`, CLI `parseList`): each item is a code, sent trimmed (`05, 09` goes out as
+    `05,09`), and an empty item (`A,,B`, `A,`) refuses the whole list, naming the item.
   GENESIS reads an empty parameter as "no filter", so a blank one would silently return
   unfiltered data. `undefined` still means "omitted". A refusal quotes the value with its
   invisible characters escaped (`quoteValue`: `"a\u200bb" contains an invisible or control
@@ -320,7 +321,7 @@ What the library rejects:
 Every value is sent without surrounding whitespace and in Unicode NFC (P11, D8; `canonical` in
 `client.ts`): the `find` term by `normalizeText`, the object `name` and every other string
 parameter by `normalizeToken` (both exported: `trim()` then NFC; inner whitespace kept), and
-`contents` item by item (`A , B` goes out as `A,B`). A term or a code pasted with a trailing
+`contents`, `regionalkey` and `classifyingkey1..5` item by item (`A , B` goes out as `A,B`). A term or a code pasted with a trailing
 space or newline matched nothing (a code answered Status 104); until the 2026-10-21 round codes
 went out as given. A decomposed umlaut (macOS clipboards, file names) looks the same but matched
 nothing: live on 2026-10-06, `find` with a decomposed "Bevölkerung" answered every list
@@ -651,7 +652,7 @@ P23 the log on stderr (record format, `--log-format jsonl`, no secret in either 
 P24 the input corpus (the `find` term, the object codes and the filter values go out trimmed
 and in NFC, or are refused on both sides, a value of only invisible characters or with a
 control, format or half character included, its refusal showing the character escaped;
-`--contents` item by item; GENESIS takes its parameters in the form body, so the adapter reads
+`--contents`, `--region-key` and `--class-key1` item by item; GENESIS takes its parameters in the form body, so the adapter reads
 them from the bodies the CLI and the library sent, and lists the codes as text inputs, as no
 value goes into a path), P25
 the response corpus (a number JSON cannot carry exactly, and an empty answer, are errors),

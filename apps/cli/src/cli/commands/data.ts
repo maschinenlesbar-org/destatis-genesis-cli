@@ -44,7 +44,7 @@ function addDataOptions(cmd: Command): Command {
       parseBoundedInt(0, Number.MAX_SAFE_INTEGER),
     )
     .option("--region-var <code>", "regional variable code", parseToken)
-    .option("--region-key <key>", "regional key (e.g. a Land/Kreis code, `*` wildcard ok)", parseToken)
+    .option("--region-key <key>", "regional key(s), comma-separated (e.g. a Land/Kreis code, `*` wildcard ok)", parseList)
     .option("--contents <labels>", "restrict to these value labels (comma-separated)", parseList)
     .option("--stand <date>", "only data newer than this date (DD.MM.YYYY)", parseToken)
     .option("--structure", "include the dimension structure tree")
@@ -53,7 +53,7 @@ function addDataOptions(cmd: Command): Command {
   for (let i = 1; i <= 5; i++) {
     cmd
       .option(`--class-var${i} <code>`, `classifying variable ${i} code`, parseToken)
-      .option(`--class-key${i} <key>`, `classifying key ${i} (value selection)`, parseToken);
+      .option(`--class-key${i} <key>`, `classifying key ${i} (value selection, comma-separated)`, parseList);
   }
   return cmd;
 }

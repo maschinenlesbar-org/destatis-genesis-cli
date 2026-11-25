@@ -132,7 +132,7 @@ export function normalizeToken(value: string): string {
 }
 
 /**
- * The items of a comma-separated list (`contents`, `--contents A,B`), as typed: each item is
+ * The items of a comma-separated list (`contents`, `regionalkey`, `classifyingkey1..5`; `--contents A,B`), as typed: each item is
  * checked (`listProblem`) and canonicalised (`normalizeToken`) on its own, so `"A, B"` sends
  * `A,B`, and `"A,,B"`, `"A,"` and `","` are refused rather than sent with an empty item.
  */
@@ -155,13 +155,17 @@ export function listProblem(items: readonly string[], itemProblem: Problem<unkno
   return undefined;
 }
 
-/** A comma-separated list parameter (`contents`): a string whose items pass {@link listProblem}. */
+/** A comma-separated list parameter (`contents`, the region and class keys): a string whose items pass {@link listProblem}. */
 function commaListProblem(value: unknown): string | undefined {
   return typeof value === "string" ? listProblem(splitList(value)) : "Expected a string.";
 }
 
-/** The parameters GENESIS takes as a comma-separated list. */
-export const LIST_PARAM_KEYS: readonly string[] = ["contents"];
+/**
+ * The parameters GENESIS takes as a comma-separated list: the value columns, the region keys and
+ * the keys of each classifying variable. A list typed with spaces ("05, 09") went out as typed,
+ * and an empty item ("05,,09") too; whatever GENESIS makes of " 09", it isn't the key asked for.
+ */
+export const LIST_PARAM_KEYS: readonly string[] = ["contents", "regionalkey", "classifyingkey1", "classifyingkey2", "classifyingkey3", "classifyingkey4", "classifyingkey5"];
 
 /**
  * A value must be one of `allowed` (exact, case-sensitive match). The reason
@@ -197,7 +201,7 @@ const RULES: Readonly<Record<string, Problem<unknown>>> = {
   sortcriterion: oneOfProblem(CRITERIA),
   format: oneOfProblem(DATA_FILE_FORMATS),
   term: textProblem,
-  contents: commaListProblem,
+  ...Object.fromEntries(LIST_PARAM_KEYS.map((key) => [key, commaListProblem])),
 };
 
 /** A `true`/`false` parameter (`structureinformation`, `compress`, `transpose`). */
@@ -213,7 +217,7 @@ const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  * and `null` mean "omitted" and are never sent. An enumerated parameter must be
  * one of its allowed values, `pagelength`/`timeslices` an integer in range,
  * `structureinformation`/`compress`/`transpose` a boolean, `term` free text
- * ({@link textProblem}), `contents` a comma-separated list ({@link listProblem}); every other
+ * ({@link textProblem}), `contents`, `regionalkey` and `classifyingkey1..5` a comma-separated list ({@link listProblem}); every other
  * parameter a token ({@link tokenProblem}: not blank or invisible, no control or format
  * character). GENESIS takes one value per parameter, so an array is rejected
  * (it went out as repeated keys, of which the server read one). Throws

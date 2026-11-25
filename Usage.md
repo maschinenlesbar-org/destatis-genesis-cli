@@ -144,8 +144,8 @@ hyphen), is a usage error (exit 2) before any request:
 |---|---|
 | `--start-year <YYYY>` · `--end-year <YYYY>` | `startyear` / `endyear` |
 | `--timeslices <n>` | `timeslices` (from the latest period back) |
-| `--region-var <code>` · `--region-key <key>` | `regionalvariable` / `regionalkey` |
-| `--class-var1..5 <code>` · `--class-key1..5 <key>` | `classifyingvariable{n}` / `classifyingkey{n}` |
+| `--region-var <code>` · `--region-key <key>` | `regionalvariable` / `regionalkey` (keys comma-separated, each trimmed, an empty one a usage error) |
+| `--class-var1..5 <code>` · `--class-key1..5 <key>` | `classifyingvariable{n}` / `classifyingkey{n}` (keys comma-separated, like `--contents`) |
 | `--contents <labels>` | `contents` (comma-separated; each label is trimmed, an empty one is a usage error) |
 | `--stand <DD.MM.YYYY>` | `stand` (only newer data) |
 | `--structure` · `--transpose` · `--compress` | `structureinformation` / `transpose` / `compress` |
