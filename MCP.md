@@ -113,8 +113,8 @@ where GENESIS's answer has one, its own `copyright` (`getFlatTable`'s download h
 and the answer says `truncated`. An answer over `--max-result-chars` first loses entries from the end of its page
 (then `nextOffset` says where to go on), then has its longest texts cut further (each with that
 mark) or, when that isn't enough, its other lists shortened (`reason` names them); a list keeps its
-first entry, `notes` stay whole, and the answer says `truncated`. One that can't be cut down so far is a tool error that says
-to ask for less. A failure is a tool error that says what to change (one over 5000 characters loses its middle, never
+first entry, `notes` stay whole (as do the lists a tool keeps whole, a part of which would be wrong data), and the answer says `truncated`. One that can't be cut down so far is a tool error that says
+to ask for less. An answer from the source over 16 MiB, the most the server reads, is a tool error that says so: narrower options don't make it smaller. A failure is a tool error that says what to change (one over 5000 characters loses its middle, never
 its end, where the reason is). A table too large
 for a direct fetch is refused by GENESIS (status 98): narrow it (the error names the tool's own arguments: years,
 region or class keys for the data tools, the term or the code pattern and `limit` for a search or a catalogue); this
