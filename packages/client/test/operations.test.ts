@@ -344,6 +344,21 @@ test("fetchData: a column with a key that has a leading zero is a key column: th
   assert.deepEqual(result.lines, [["Saarland", "10", 992666], ["Berlin", "11", 3878100], ["Thüringen", "16", 2114870]]);
 });
 
+test("fetchData: Land keys 10 to 16 stay text when no key in the column has a leading zero: the keys asked for mark the column", async () => {
+  const content = "Land;Schlüssel;Hochschulen;Einwohner\nSaarland;10;10;992.666\nBerlin;11;12;3.878.100\nThüringen;16;14;2.114.870\n";
+  const laender = { ...DATA_SYMBOLS, Object: { Code: "12411-0010", Content: content } };
+  for (const regionKey of ["1*", "10,11,16", " 10 , 11 , 16 "]) {
+    const { client } = clientFor(() => jsonResponse(laender));
+    const result = await fetchData(client, { code: "12411-0010", regionVariable: "DLAND", regionKey });
+    assert.equal(result.status, "ok");
+    if (result.status !== "ok") return;
+    assert.deepEqual(result.lines.slice(1), [["Saarland", "10", 10, 992666], ["Berlin", "11", 12, 3878100], ["Thüringen", "16", 14, 2114870]], regionKey);
+  }
+  // Without a region key nothing marks the column: the numbers stay numbers.
+  const plain = await fetchData(clientFor(() => jsonResponse(laender)).client, { code: "12411-0010" });
+  assert.equal(plain.status === "ok" && plain.lines[2]?.[1], 11);
+});
+
 test("getFlatTable: the ffcsv download is unpacked from its ZIP and split into columns and rows", async () => {
   const { client, upstream } = clientFor(() => rawResponse(zipOf({ "12411-0001_flat.csv": FFCSV_12411_0001 }), "application/zip"));
   const result = await getFlatTable(client, { code: "12411-0001", startYear: "2022" });

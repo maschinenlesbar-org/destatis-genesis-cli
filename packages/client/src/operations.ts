@@ -349,7 +349,7 @@ export async function fetchData(client: DestatisClient, input: FetchDataInput): 
     return { status: "empty", kind, code, searched, reason: await whyEmpty(client, kind, code, searched), copyright: answer.Copyright };
   }
   const all = csvLines(content);
-  const keyColumns = keyColumnsOf(all);
+  const keyColumns = keyColumnsOf(all, input.regionKey);
   // With language en, GENESIS may write its figures in English format (162,273 for 162.273), which
   // the German rule would read as a thousandth: not verified, so nothing is decoded.
   const decode = input.language !== "en";
@@ -419,16 +419,64 @@ export interface FindStatisticsInput {
 /**
  * The columns that hold region or other keys, whose cells stay text. A column with a key that has a
  * leading zero (01, 09, 05315) is one, over every line, not only the page: so Berlin's 11 is not a
- * number where Schleswig-Holstein's 01 is a key. One line split at a time.
+ * number where Schleswig-Holstein's 01 is a key. Keys without one (the Länder 10 to 16, their
+ * Regierungsbezirke 101 to 160) are found by the keys asked for (`regionKey`): the leftmost column
+ * whose numbers are all plain digits matching one of them is the key column, so a Länder table for
+ * "1*" doesn't give its keys as numbers. One line split at a time.
  */
-function keyColumnsOf(lines: readonly string[]): Set<number> {
+function keyColumnsOf(lines: readonly string[], regionKey: string | undefined): Set<number> {
   const keyColumns = new Set<number>();
+  const asked = regionKeyTest(regionKey);
+  // Per column: a cell matched a key asked for; a cell was another number.
+  const matched: boolean[] = [];
+  const other: boolean[] = [];
   for (const line of lines) {
     splitCsvLine(line).forEach((raw, i) => {
-      if (/^0\d+$/.test(raw.trim())) keyColumns.add(i);
+      const cell = raw.trim();
+      if (/^0\d+$/.test(cell)) keyColumns.add(i);
+      if (asked === undefined || other[i] === true) return;
+      if (/^\d{1,12}$/.test(cell) && asked(cell)) matched[i] = true;
+      else if (germanNumber(cell) !== undefined || /^\d+$/.test(cell)) other[i] = true;
     });
   }
+  const column = matched.findIndex((hit, i) => hit === true && other[i] !== true);
+  if (column >= 0) keyColumns.add(column);
   return keyColumns;
+}
+
+/**
+ * Whether a cell of digits is one of the region keys asked for: `regionKey` comma-separated, `*`
+ * any characters. Checked without a regular expression, so a pattern full of stars stays linear.
+ */
+function regionKeyTest(regionKey: string | undefined): ((cell: string) => boolean) | undefined {
+  if (regionKey === undefined) return undefined;
+  const patterns = regionKey.split(",").map((item) => item.trim()).filter((item) => item !== "");
+  if (patterns.length === 0) return undefined;
+  return (cell) => patterns.some((pattern) => wildcardMatch(pattern, cell));
+}
+
+/** `*` matches any run of characters; everything else itself. Greedy with one backtrack point: linear in practice. */
+function wildcardMatch(pattern: string, text: string): boolean {
+  let p = 0;
+  let t = 0;
+  let star = -1;
+  let mark = 0;
+  while (t < text.length) {
+    if (p < pattern.length && pattern[p] !== "*" && pattern[p] === text[t]) {
+      p += 1;
+      t += 1;
+    } else if (p < pattern.length && pattern[p] === "*") {
+      star = p;
+      mark = t;
+      p += 1;
+    } else if (star >= 0) {
+      p = star + 1;
+      mark += 1;
+      t = mark;
+    } else return false;
+  }
+  while (p < pattern.length && pattern[p] === "*") p += 1;
+  return p === pattern.length;
 }
 
 /** The answer of {@link findStatistics}. */
