@@ -137,6 +137,22 @@ function noSuchObject(err: unknown): err is DestatisApiError {
 }
 
 /**
+ * An answer that isn't "nothing matched" (104) but lacks a key every success of its endpoint has
+ * (`Tables` and the other lists of a search, `Object.Content` of data, a table's `Structure`, a
+ * catalogue's `List`): a shape this client doesn't know, so an error, never read as "nothing".
+ * A renamed key would otherwise make every answer a confident "no hits" or "the selection excluded
+ * everything".
+ */
+function unexpectedShape(endpoint: string, missing: string): DestatisParseError {
+  return new DestatisParseError(`GENESIS's answer to ${endpoint} has no ${missing}: a shape this client doesn't know (the API may have changed), so nothing is read from it.`);
+}
+
+/** True for a JSON object (not null, not a list). */
+function isObject(value: unknown): value is Record<string, JsonValue | undefined> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
  * Why a data request found nothing: no object with that code, or the selection excluded every
  * value. GENESIS answers both with Status 104; the code's metadata tells them apart (a result has
  * no metadata endpoint, so for one the reason names both).
@@ -324,6 +340,7 @@ export async function fetchData(client: DestatisClient, input: FetchDataInput): 
     }
     throw err;
   }
+  if (!isEmpty(answer) && !(isObject(answer.Object) && "Content" in answer.Object)) throw unexpectedShape(`data/${kind}`, "Object.Content");
   const content = answer.Object?.Content;
   if (isEmpty(answer) || typeof content !== "string" || content.trim() === "") {
     return { status: "empty", kind, code, searched, reason: await whyEmpty(client, kind, code, searched), copyright: answer.Copyright };
@@ -408,6 +425,7 @@ export async function findStatistics(client: DestatisClient, input: FindStatisti
   const limit = assertValid("limit", input.limit ?? 20, (v: number) => (Number.isSafeInteger(v) && v >= 1 && v <= 100 ? undefined : "Expected a whole number from 1 to 100."));
   const searched = { term, category };
   const answer = await client.find({ term, category, pagelength: limit, ...(input.language === undefined ? {} : { language: input.language }) });
+  if (!isEmpty(answer) && !Object.keys(FIND_LISTS).some((list) => list in answer)) throw unexpectedShape("find/find", `any of its lists (${Object.keys(FIND_LISTS).join(", ")})`);
   const matches: FoundObject[] = [];
   for (const [list, type] of Object.entries(FIND_LISTS) as [keyof typeof FIND_LISTS, FoundObject["type"]][]) {
     const items = answer[list];
@@ -493,6 +511,7 @@ export async function browseCatalogue(client: DestatisClient, input: BrowseCatal
   };
   const searched = { kind, selection, searchIn };
   const answer = await client.catalogue[kind](params);
+  if (!isEmpty(answer) && !("List" in answer)) throw unexpectedShape(`catalogue/${kind}`, "List");
   const list = Array.isArray(answer.List) ? (answer.List as unknown as Record<string, unknown>[]) : [];
   if (isEmpty(answer) || list.length === 0) {
     return {
@@ -564,6 +583,8 @@ export async function describeObject(client: DestatisClient, input: DescribeObje
     throw err;
   }
   const object = answer.Object;
+  if (!isEmpty(answer) && !isObject(object)) throw unexpectedShape(`metadata/${kind}`, "Object");
+  if (!isEmpty(answer) && kind === "table" && !("Structure" in (object as object))) throw unexpectedShape("metadata/table", "Object.Structure");
   if (isEmpty(answer) || object === undefined || object === null || typeof object !== "object") {
     return { status: "empty", kind, code, reason: notFoundReason(kind, code), copyright: answer.Copyright };
   }
