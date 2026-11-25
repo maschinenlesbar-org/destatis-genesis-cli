@@ -62,6 +62,8 @@ const input = (properties: Record<string, JsonSchema>, required: string[] = []):
 const year = (description: string): JsonSchema => ({ type: "string", pattern: "^[0-9]{4}$", description });
 const LANGUAGE: JsonSchema = { type: "string", enum: ["de", "en"], description: "Labels in German (default) or English (partly translated)." };
 const DATA_LANGUAGE: JsonSchema = { ...LANGUAGE, description: "Labels in German (default) or English (partly translated). With en, fetchData leaves the figures as text: GENESIS's English number format isn't known." };
+/** GENESIS's status 22 (it changed a parameter of the request, a page length or a language): read it, the answer may be shortened. */
+const NOTE: JsonSchema = { type: "object", description: "GENESIS changed a parameter of the request (status 22, its text says which): the answer may be shortened or differ from what was asked." };
 
 /** How every data tool is narrowed. */
 const SELECTION: Record<string, JsonSchema> = {
@@ -240,7 +242,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       },
       ["code"],
     ),
-    outputSchema: output({ kind: textOut, code: textOut, title: textOut, total: int, offset: int, lines: arr, symbols: obj, statusNote: obj }),
+    outputSchema: output({ kind: textOut, code: textOut, title: textOut, total: int, offset: int, lines: arr, symbols: obj, statusNote: NOTE }),
     source: (args) => sourceOf(`data/${str(args, "kind") ?? "table"}`, dataParams(args)),
     paged: (args) => ({ list: "lines", offset: num(args, "offset") ?? 0 }),
     async run(args, context) {
@@ -268,7 +270,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       },
       ["term"],
     ),
-    outputSchema: output({ matches: arr, perTypeLimit: int, complete: { type: "boolean" } }),
+    outputSchema: output({ matches: arr, perTypeLimit: int, complete: { type: "boolean" }, statusNote: NOTE }),
     source: (args) => sourceOf("find/find", { term: str(args, "term"), category: str(args, "category") ?? "tables", pagelength: num(args, "limit") ?? 20, language: str(args, "language") }),
     async run(args, context) {
       return cited(
@@ -330,7 +332,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       },
       ["code"],
     ),
-    outputSchema: output({ kind: textOut, code: textOut, title: textOut, timeSpan: obj, dimensions: arr, metadata: obj }),
+    outputSchema: output({ kind: textOut, code: textOut, title: textOut, timeSpan: obj, dimensions: arr, metadata: obj, statusNote: NOTE }),
     source: (args) => sourceOf(`metadata/${str(args, "kind") ?? "table"}`, { name: str(args, "code"), language: str(args, "language") }),
     async run(args, context) {
       return cited(
@@ -360,7 +362,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       },
       ["selection"],
     ),
-    outputSchema: output({ items: arr, complete: { type: "boolean" } }),
+    outputSchema: output({ items: arr, complete: { type: "boolean" }, statusNote: NOTE }),
     source: (args) =>
       sourceOf(`catalogue/${str(args, "kind") ?? "tables"}`, {
         selection: str(args, "selection"),

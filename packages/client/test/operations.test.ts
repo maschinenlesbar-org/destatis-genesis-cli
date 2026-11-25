@@ -237,6 +237,30 @@ test("findStatistics: a type's list as long as the limit is not complete, as in 
   assert.equal(under.complete, true);
 });
 
+test("a status 22 (GENESIS changed a parameter) is kept as statusNote by every operation, and a list it may have shortened is not complete", async () => {
+  const note = { Code: 22, Content: "erfolgreich mit Parameteranpassung: pagelength auf 10 gesetzt", Type: "Warnung" };
+  const changed = (endpoint: string) => {
+    if (endpoint === "find/find") return jsonResponse({ ...FIND_TABLES, Status: note });
+    if (endpoint === "catalogue/tables") return jsonResponse({ ...TABLES_12411, Status: note });
+    return jsonResponse({ ...METADATA_12411_0001, Status: note });
+  };
+  const expected = { code: 22, text: note.Content };
+  const found = await findStatistics(clientFor(changed).client, { term: "Bevölkerung", limit: 50 });
+  assert.equal(found.status, "ok");
+  if (found.status !== "ok") return;
+  assert.deepEqual(found.statusNote, expected);
+  assert.equal(found.complete, false);
+  const browsed = await browseCatalogue(clientFor(changed).client, { selection: "12411*", limit: 500 });
+  assert.equal(browsed.status, "ok");
+  if (browsed.status !== "ok") return;
+  assert.deepEqual(browsed.statusNote, expected);
+  assert.equal(browsed.complete, false);
+  const described = await describeObject(clientFor(changed).client, { code: "12411-0001" });
+  assert.equal(described.status, "ok");
+  if (described.status !== "ok") return;
+  assert.deepEqual(described.statusNote, expected);
+});
+
 test("browseCatalogue: a code pattern lists the matching tables; complete when under the limit", async () => {
   const { client, upstream } = clientFor(() => jsonResponse(TABLES_12411));
   const result = await browseCatalogue(client, { selection: "12411*" });

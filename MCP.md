@@ -122,7 +122,9 @@ server, like the CLI, doesn't run GENESIS's batch jobs. An HTTP 404 without a GE
 status (a moved path, a proxy) is a tool error saying the API's endpoint wasn't found, never "no
 such table"; an HTTP 403 without one reads as blocked on the way (a proxy, a firewall, a rate
 block), not as a refused login; a 502, 503 or 504 after the retries and a request timeout say
-that GENESIS is sometimes slow or down and to try again shortly.
+that GENESIS is sometimes slow or down and to try again shortly. A request GENESIS changed (its status 22, "erfolgreich mit
+Parameteranpassung") keeps GENESIS's note as `statusNote` in every tool's answer, and a list it may
+have shortened is not `complete`.
 
 ## Options
 
