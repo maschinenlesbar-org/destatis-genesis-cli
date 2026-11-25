@@ -279,6 +279,14 @@ test("describeObject: a code that doesn't exist (Status 104, no Object) is empty
   assert.match(result.reason, /Codes are exact/);
 });
 
+test("fetchData and getFlatTable: a start year after the end year is refused before any request", async () => {
+  const { client, upstream } = clientFor(() => jsonResponse(DATA_12411_0001));
+  await assert.rejects(fetchData(client, { code: "12411-0001", startYear: "2023", endYear: "2015" }), (err: unknown) => err instanceof DestatisValidationError && /startYear 2023 is after endYear 2015/.test(err.message));
+  await assert.rejects(getFlatTable(client, { code: "12411-0001", startYear: "2023", endYear: "2015" }), DestatisValidationError);
+  assert.equal(upstream.calls.length, 0);
+  assert.equal((await fetchData(client, { code: "12411-0001", startYear: "2015", endYear: "2015" })).status, "ok");
+});
+
 test("getFlatTable: the ffcsv download is unpacked from its ZIP and split into columns and rows", async () => {
   const { client, upstream } = clientFor(() => rawResponse(zipOf({ "12411-0001_flat.csv": FFCSV_12411_0001 }), "application/zip"));
   const result = await getFlatTable(client, { code: "12411-0001", startYear: "2022" });
