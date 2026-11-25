@@ -567,9 +567,12 @@ wrapper. The engine (`request()`/`callTransport()` in `engine.ts`) keeps its pro
 for every transport (P5):
 
 - **`timeoutMs`** — the call runs under an overall deadline: the request carries an
-  `AbortSignal` (`HttpRequest.signal`, which the default transport honours and a fetch
-  transport passes on) and the engine rejects with `DestatisNetworkError` at the
-  deadline whether the transport stops or not.
+  `AbortSignal` (`HttpRequest.signal`, aborted with the engine's timeout error as its reason,
+  which the default transport honours and a fetch transport passes on: the default transport
+  stops with that reason, and for a signal some other caller aborted, the MCP server's tool
+  call (its deadline, a cancellation), it says "Request aborted by its caller before it
+  finished", never a timeout it didn't have) and the engine rejects with
+  `DestatisNetworkError` at the deadline whether the transport stops or not.
 - **`maxResponseBytes`** — checked again on the body the transport hands back
   (`sizeLimitMessage` names the option and `--max-response-bytes`). The default transport
   joins small chunks as they arrive (`COALESCE_CHUNKS`, 1024, or `COALESCE_BYTES`, 64 KiB), so
