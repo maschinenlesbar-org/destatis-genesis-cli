@@ -334,6 +334,16 @@ test("fetchData: with language en the figures stay text as sent: GENESIS's Engli
   assert.equal(german.status === "ok" && german.lines[9]?.[1], 84669326);
 });
 
+test("fetchData: a column with a key that has a leading zero is a key column: the Länder 01 to 16 all stay text, the figures beside them numbers", async () => {
+  const content = "Land;Schlüssel;2023\nSchleswig-Holstein;01;2.953.270\nBayern;09;13.369.393\nSaarland;10;992.666\nBerlin;11;3.878.100\nThüringen;16;2.114.870\n";
+  const laender = { ...DATA_SYMBOLS, Object: { Code: "12411-0010", Content: content } };
+  // Paged past the 01 and 09: the key column is found over every line, not only the page.
+  const result = await fetchData(clientFor(() => jsonResponse(laender)).client, { code: "12411-0010", offset: 3 });
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.deepEqual(result.lines, [["Saarland", "10", 992666], ["Berlin", "11", 3878100], ["Thüringen", "16", 2114870]]);
+});
+
 test("getFlatTable: the ffcsv download is unpacked from its ZIP and split into columns and rows", async () => {
   const { client, upstream } = clientFor(() => rawResponse(zipOf({ "12411-0001_flat.csv": FFCSV_12411_0001 }), "application/zip"));
   const result = await getFlatTable(client, { code: "12411-0001", startYear: "2022" });

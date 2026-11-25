@@ -349,10 +349,11 @@ export async function fetchData(client: DestatisClient, input: FetchDataInput): 
     return { status: "empty", kind, code, searched, reason: await whyEmpty(client, kind, code, searched), copyright: answer.Copyright };
   }
   const all = csvLines(content);
+  const keyColumns = keyColumnsOf(all);
   // With language en, GENESIS may write its figures in English format (162,273 for 162.273), which
   // the German rule would read as a thousandth: not verified, so nothing is decoded.
   const decode = input.language !== "en";
-  const lines = all.slice(offset, offset + limit).map((line) => splitCsvLine(line).map((cell): Cell => (decode ? (germanNumber(cell) ?? cell) : cell)));
+  const lines = all.slice(offset, offset + limit).map((line) => splitCsvLine(line).map((cell, i): Cell => (!decode || keyColumns.has(i) ? cell : (germanNumber(cell) ?? cell))));
   const symbols: Record<string, string> = {};
   for (const line of lines) for (const cell of line) if (typeof cell === "string" && VALUE_SYMBOLS[cell.trim()] !== undefined) symbols[cell.trim()] = VALUE_SYMBOLS[cell.trim()] as string;
   const title = titleOf(answer.Object);
@@ -413,6 +414,21 @@ export interface FindStatisticsInput {
   /** At most this many per type (1–100, default 20). */
   limit?: number | undefined;
   language?: Language | undefined;
+}
+
+/**
+ * The columns that hold region or other keys, whose cells stay text. A column with a key that has a
+ * leading zero (01, 09, 05315) is one, over every line, not only the page: so Berlin's 11 is not a
+ * number where Schleswig-Holstein's 01 is a key. One line split at a time.
+ */
+function keyColumnsOf(lines: readonly string[]): Set<number> {
+  const keyColumns = new Set<number>();
+  for (const line of lines) {
+    splitCsvLine(line).forEach((raw, i) => {
+      if (/^0\d+$/.test(raw.trim())) keyColumns.add(i);
+    });
+  }
+  return keyColumns;
 }
 
 /** The answer of {@link findStatistics}. */
