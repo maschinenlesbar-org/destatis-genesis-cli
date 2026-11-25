@@ -361,6 +361,17 @@ test("readZip: an entry larger than the cap, an encrypted entry and something th
   assert.deepEqual(readZip(zipOf({ "dir/": "", "a.csv": "a;b" })).map((e) => e.name), ["a.csv"]);
 });
 
+test("an HTML 404 without a GENESIS status (a moved path, a proxy) is the client's error, never 'no such object'", async () => {
+  const page = () => rawResponse("<!DOCTYPE html><html><body><h1>HTTP Status 404 – Not Found</h1></body></html>", "text/html", 404);
+  const isBare404 = (err: unknown) => err instanceof DestatisApiError && err.httpStatus === 404 && err.code === undefined;
+  await assert.rejects(fetchData(clientFor(page).client, { code: "12411-0001" }), isBare404);
+  await assert.rejects(getFlatTable(clientFor(page).client, { code: "12411-0001" }), isBare404);
+  await assert.rejects(describeObject(clientFor(page).client, { code: "12411-0001" }), isBare404);
+  // The data answered "nothing" (104), but the metadata that tells why is not found itself.
+  const { client } = clientFor((endpoint) => (endpoint.startsWith("metadata/") ? page() : jsonResponse(EMPTY_104("data", "table"))));
+  await assert.rejects(fetchData(client, { code: "12411-0001" }), isBare404);
+});
+
 test("fetchData: GENESIS's 'object not found' (Status 90) is empty too, naming the code", async () => {
   const { client } = clientFor(() => jsonResponse({ ...EMPTY_104("data", "table"), Status: { Code: 90, Content: "Der angeforderte Wert wurde nicht gefunden.", Type: "Fehler" } }));
   const result = await fetchData(client, { code: "12411-9999" });

@@ -127,6 +127,16 @@ function isEmpty(answer: GenesisEnvelope): boolean {
 }
 
 /**
+ * True for GENESIS's own "no such object": status 90 (object not found), or 104 on a download. Not
+ * for an HTTP 404 without a GENESIS status (`isNotFound` counts one, for the CLI's exit code): that
+ * is a moved path or a proxy page, the endpoint not found rather than the object, and stays the
+ * client's error; nor for a refused login.
+ */
+function noSuchObject(err: unknown): err is DestatisApiError {
+  return err instanceof DestatisApiError && !err.isAuthError && (err.code === 90 || err.code === 104);
+}
+
+/**
  * Why a data request found nothing: no object with that code, or the selection excluded every
  * value. GENESIS answers both with Status 104; the code's metadata tells them apart (a result has
  * no metadata endpoint, so for one the reason names both).
@@ -141,7 +151,7 @@ async function whyEmpty(client: DestatisClient, kind: DataKind, code: string, se
     const meta = await client.metadata[kind](code);
     exists = !isEmpty(meta);
   } catch (err) {
-    if (err instanceof DestatisApiError && err.isNotFound) exists = false;
+    if (noSuchObject(err)) exists = false;
     else throw err;
   }
   if (!exists) return `There is no ${kind} with the code ${code} (its metadata is empty too). Search for the right code by topic; don't guess codes.`;
@@ -309,7 +319,7 @@ export async function fetchData(client: DestatisClient, input: FetchDataInput): 
     answer = await client.data[kind](code, params);
   } catch (err) {
     // GENESIS's "object not found" (Status 90), rarer than 104 for a wrong code.
-    if (err instanceof DestatisApiError && err.isNotFound && !err.isAuthError) {
+    if (noSuchObject(err)) {
       return { status: "empty", kind, code, searched, reason: `GENESIS knows no ${kind} with the code ${code} (${err.message.replace(/ for POST \S+/, "")}). Search for the right code by topic; don't guess codes.`, copyright: "" };
     }
     throw err;
@@ -548,7 +558,7 @@ export async function describeObject(client: DestatisClient, input: DescribeObje
   try {
     answer = await client.metadata[kind](code, input.language === undefined ? {} : { language: input.language });
   } catch (err) {
-    if (err instanceof DestatisApiError && err.isNotFound && !err.isAuthError) {
+    if (noSuchObject(err)) {
       return { status: "empty", kind, code, reason: notFoundReason(kind, code), copyright: "" };
     }
     throw err;
@@ -662,7 +672,7 @@ export async function getFlatTable(client: DestatisClient, input: FlatTableInput
     raw = await client.data[FILE_METHODS[kind]](code, { ...(params as DataFileParams), format: "ffcsv" });
   } catch (err) {
     // A download that finds nothing is GENESIS's Status 104 instead of a file: the client throws it.
-    if (err instanceof DestatisApiError && err.isNotFound && !err.isAuthError) {
+    if (noSuchObject(err)) {
       return { status: "empty", kind, code, searched, reason: await whyEmpty(client, kind, code, searched) };
     }
     throw err;
