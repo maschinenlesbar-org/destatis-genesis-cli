@@ -287,6 +287,18 @@ test("fetchData and getFlatTable: a start year after the end year is refused bef
   assert.equal((await fetchData(client, { code: "12411-0001", startYear: "2015", endYear: "2015" })).status, "ok");
 });
 
+test("fetchData: with language en the figures stay text as sent: GENESIS's English number format isn't known, so none is guessed", async () => {
+  const english = { ...DATA_SYMBOLS, Object: { Code: "12613-0002", Content: "Land;Key;2023\nBerlin;11;3,878,100\nHamburg;02;162,273\nBremen;04;.\n" } };
+  const { client } = clientFor(() => jsonResponse(english));
+  const result = await fetchData(client, { code: "12613-0002", language: "en" });
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.deepEqual(result.lines.map((line) => line[2]), ["2023", "3,878,100", "162,273", "."]);
+  assert.equal(result.symbols["."], "unknown or kept secret");
+  const german = await fetchData(clientFor(() => jsonResponse(DATA_12411_0001)).client, { code: "12411-0001", language: "de" });
+  assert.equal(german.status === "ok" && german.lines[9]?.[1], 84669326);
+});
+
 test("getFlatTable: the ffcsv download is unpacked from its ZIP and split into columns and rows", async () => {
   const { client, upstream } = clientFor(() => rawResponse(zipOf({ "12411-0001_flat.csv": FFCSV_12411_0001 }), "application/zip"));
   const result = await getFlatTable(client, { code: "12411-0001", startYear: "2022" });

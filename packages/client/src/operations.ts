@@ -349,7 +349,10 @@ export async function fetchData(client: DestatisClient, input: FetchDataInput): 
     return { status: "empty", kind, code, searched, reason: await whyEmpty(client, kind, code, searched), copyright: answer.Copyright };
   }
   const all = csvLines(content);
-  const lines = all.slice(offset, offset + limit).map((line) => splitCsvLine(line).map((cell): Cell => germanNumber(cell) ?? cell));
+  // With language en, GENESIS may write its figures in English format (162,273 for 162.273), which
+  // the German rule would read as a thousandth: not verified, so nothing is decoded.
+  const decode = input.language !== "en";
+  const lines = all.slice(offset, offset + limit).map((line) => splitCsvLine(line).map((cell): Cell => (decode ? (germanNumber(cell) ?? cell) : cell)));
   const symbols: Record<string, string> = {};
   for (const line of lines) for (const cell of line) if (typeof cell === "string" && VALUE_SYMBOLS[cell.trim()] !== undefined) symbols[cell.trim()] = VALUE_SYMBOLS[cell.trim()] as string;
   const title = titleOf(answer.Object);
