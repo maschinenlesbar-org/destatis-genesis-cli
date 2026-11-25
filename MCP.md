@@ -121,7 +121,8 @@ region or class keys for the data tools, the term or the code pattern and `limit
 server, like the CLI, doesn't run GENESIS's batch jobs. An HTTP 404 without a GENESIS
 status (a moved path, a proxy) is a tool error saying the API's endpoint wasn't found, never "no
 such table"; an HTTP 403 without one reads as blocked on the way (a proxy, a firewall, a rate
-block), not as a refused login.
+block), not as a refused login; a 502, 503 or 504 after the retries and a request timeout say
+that GENESIS is sometimes slow or down and to try again shortly.
 
 ## Options
 
