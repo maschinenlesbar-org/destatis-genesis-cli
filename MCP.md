@@ -120,7 +120,8 @@ for a direct fetch is refused by GENESIS (status 98): narrow it (the error names
 region or class keys for the data tools, the term or the code pattern and `limit` for a search or a catalogue); this
 server, like the CLI, doesn't run GENESIS's batch jobs. An HTTP 404 without a GENESIS
 status (a moved path, a proxy) is a tool error saying the API's endpoint wasn't found, never "no
-such table".
+such table"; an HTTP 403 without one reads as blocked on the way (a proxy, a firewall, a rate
+block), not as a refused login.
 
 ## Options
 

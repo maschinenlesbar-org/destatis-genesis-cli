@@ -229,6 +229,17 @@ test("describeObject: the dimensions and the time span; a missing code is empty"
   await connection.close();
 });
 
+test("an HTTP 403 without a GENESIS status reads as blocked on the way, not as a refused login", async () => {
+  const connection = await connect({ transport: makeMockTransport(() => ({ status: 403, headers: { "content-type": "text/html" }, body: Buffer.from("<html>Forbidden</html>") })) });
+  const result = await connection.call("findStatistics", { term: "Bevölkerung" });
+  assert.equal(result.isError, true);
+  const text = result.content[0]?.text ?? "";
+  assert.match(text, /HTTP 403/);
+  assert.match(text, /blocked/);
+  assert.doesNotMatch(text, /refused the server's login/);
+  await connection.close();
+});
+
 test("an HTML 404 on every endpoint (a moved path, a proxy) is a tool error saying the endpoint wasn't found, never 'no such table'", async () => {
   const page = () => ({ status: 404, headers: { "content-type": "text/html" }, body: Buffer.from("<!DOCTYPE html><html><body><h1>HTTP Status 404 – Not Found</h1></body></html>") });
   const connection = await connect({ transport: makeMockTransport(page) });
