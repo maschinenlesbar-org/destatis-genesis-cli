@@ -379,8 +379,10 @@ The **credentials file** is written by the CLI only; its store lives with the cl
 module, so the MCP server can read it too: `packages/client/src/credentials.ts`
 (`CredentialStore`, the same mechanism as openka-cli's `ka config`, not part of the library's
 public surface; `apps/cli/src/cli/credentials.ts` re-exports it) and `destatis
-config` (`apps/cli/src/cli/commands/config.ts`; names `token`, `username`, `password`). It
-reaches the CLI through `CliDeps.credentials`, which only `defaultDeps` sets, so a test
+config` (`apps/cli/src/cli/commands/config.ts`; names `token`, `username`, `password`). A
+link, another user's file or one others can read is refused with a `DestatisError` (exit 1):
+one others can read names `chmod 600`, a link the file itself in its place or `destatis config
+set` again. It reaches the CLI through `CliDeps.credentials`, which only `defaultDeps` sets, so a test
 that does not ask for one never reads the user's file. `action()` (`shared.ts`,
 `storedCredentials`) reads it only when the flags and variables give no credential at
 all (and not with `--guest`, nor for `hello`), and then takes the whole login from it:
